@@ -1,0 +1,13 @@
+name = "MissingDataViz"
+uuid = "63ac8797-bce4-4763-99a7-d88834fad9f5"
+authors = ["Rene Fassou Ballamou and collaborators <renefassouballamou96@gmail.com>"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.9"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
