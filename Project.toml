@@ -1,13 +1,29 @@
 name = "MissingDataViz"
 uuid = "63ac8797-bce4-4763-99a7-d88834fad9f5"
-authors = ["Rene Fassou Ballamou and collaborators <renefassouballamou96@gmail.com>"]
-version = "1.0.0-DEV"
+authors = ["Rene Fassou Ballamou <renefassouballamou96@gmail.com>"]
+version = "0.1.0"
+repo = "https://github.com/DescarteS96/MissingDataViz.jl"
+
+[deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+CairoMakie = "0.12"
+DataFrames = "1.6"
+Makie = "0.20"
 julia = "1.9"
 
 [extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+RDatasets = "ce6b1742-4840-55fa-b093-852dadbb1d8b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Test", "BenchmarkTools", "RDatasets"]

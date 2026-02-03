@@ -1,0 +1,332 @@
+# HTML template generation for missing data reports
+
+"""
+    _generate_html_template(title::String, summary_html::String, 
+                           plots_html::String, timestamp::String)::String
+
+Generate complete HTML document for missing data report.
+
+This is an internal function that assembles the final HTML from components.
+
+# Arguments
+- `title::String`: Report title
+- `summary_html::String`: HTML for summary statistics table
+- `plots_html::String`: HTML for visualizations section
+- `timestamp::String`: Generation timestamp
+
+# Returns
+- `String`: Complete HTML document (ready to write to file)
+
+# Template Structure
+- DOCTYPE HTML5
+- Inline CSS (no external dependencies)
+- Responsive meta tags
+- Sections: Header, Summary, Visualizations, Footer
+- Fixed width: 1200px (desktop-optimized)
+"""
+function _generate_html_template(title::String, summary_html::String, 
+                                 plots_html::String, timestamp::String)::String
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$title</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        section {
+            margin-bottom: 50px;
+        }
+        
+        h2 {
+            font-size: 1.8em;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+        
+        thead {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        
+        .plot-container {
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .plot-container h3 {
+            font-size: 1.3em;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        
+        footer {
+            background-color: #f8f9fa;
+            padding: 20px 40px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            border-top: 1px solid #ddd;
+        }
+        
+        footer p {
+            margin: 5px 0;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .badge-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>$title</h1>
+            <p>Comprehensive Missing Data Analysis Report</p>
+        </header>
+        
+        <div class="content">
+            <section id="summary">
+                <h2>📊 Summary Statistics</h2>
+                $summary_html
+            </section>
+            
+            <section id="visualizations">
+                <h2>📈 Visualizations</h2>
+                $plots_html
+            </section>
+        </div>
+        
+        <footer>
+            <p><strong>Generated by MissingDataViz.jl</strong></p>
+            <p>Timestamp: $timestamp</p>
+            <p>Julia package for missing data visualization and diagnosis</p>
+        </footer>
+    </div>
+</body>
+</html>
+"""
+end
+
+"""
+    _generate_summary_table(df::DataFrame, stats::Dict)::String
+
+Generate HTML table with summary statistics of missing data.
+
+# Arguments
+- `df::DataFrame`: Input data
+- `stats::Dict`: Statistics dictionary from pattern detection module
+
+# Returns
+- `String`: HTML table element with summary statistics
+"""
+function _generate_summary_table(df::DataFrame, stats::Dict)::String
+    n_rows, n_cols = size(df)
+    
+    # Start table
+    html = """
+    <table>
+        <thead>
+            <tr>
+                <th>Column</th>
+                <th>Missing Count</th>
+                <th>Missing %</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+    """
+    
+    # Add row for each column
+    for col in names(df)
+        missing_count = stats[:columns][col][:count]
+        missing_pct = stats[:columns][col][:percentage]
+        
+        # Determine status badge
+        badge_class = if missing_pct == 0
+            "badge-success"
+        elseif missing_pct < 25
+            "badge-warning"
+        else
+            "badge-danger"
+        end
+        
+        status = if missing_pct == 0
+            "Complete"
+        elseif missing_pct < 25
+            "Minor"
+        elseif missing_pct < 50
+            "Moderate"
+        else
+            "Severe"
+        end
+        
+        html *= """
+            <tr>
+                <td><strong>$col</strong></td>
+                <td>$missing_count / $n_rows</td>
+                <td>$(round(missing_pct, digits=2))%</td>
+                <td><span class="badge $badge_class">$status</span></td>
+            </tr>
+        """
+    end
+    
+    html *= """
+        </tbody>
+    </table>
+    
+    <p><strong>Overall Summary:</strong> 
+       $(stats[:total_missing]) missing values out of $(n_rows * n_cols) total cells 
+       ($(round(stats[:total_missing] / (n_rows * n_cols) * 100, digits=2))%)
+    </p>
+    """
+    
+    return html
+end
+
+"""
+    _generate_plots_section(matrix_b64::String, bars_b64::String, 
+                           corr_b64::String, overview_b64::String)::String
+
+Generate HTML section with embedded base64 plot images.
+
+# Arguments
+- `matrix_b64::String`: Base64 data URI for missing matrix plot
+- `bars_b64::String`: Base64 data URI for bar chart
+- `corr_b64::String`: Base64 data URI for correlation matrix
+- `overview_b64::String`: Base64 data URI for overview dashboard
+
+# Returns
+- `String`: HTML with plot containers and embedded images
+"""
+function _generate_plots_section(matrix_b64::String, bars_b64::String, 
+                                 corr_b64::String, overview_b64::String)::String
+    return """
+    <div class="plot-container">
+        <h3>Missing Data Matrix</h3>
+        <img src="$matrix_b64" alt="Missing Data Matrix">
+        <p style="margin-top: 10px; color: #666; font-size: 0.9em;">
+            Heatmap showing missing (red) vs present (blue) values across all observations.
+        </p>
+    </div>
+    
+    <div class="plot-container">
+        <h3>Missing Percentage by Column</h3>
+        <img src="$bars_b64" alt="Missing Bars Chart">
+        <p style="margin-top: 10px; color: #666; font-size: 0.9em;">
+            Bar chart displaying the percentage of missing values for each column.
+        </p>
+    </div>
+    
+    <div class="plot-container">
+        <h3>Missing Data Correlation Matrix</h3>
+        <img src="$corr_b64" alt="Correlation Matrix">
+        <p style="margin-top: 10px; color: #666; font-size: 0.9em;">
+            Correlation between missingness patterns across columns (ranges from -1 to +1).
+        </p>
+    </div>
+    
+    <div class="plot-container">
+        <h3>Complete Overview Dashboard</h3>
+        <img src="$overview_b64" alt="Overview Dashboard">
+        <p style="margin-top: 10px; color: #666; font-size: 0.9em;">
+            Combined view of all visualizations for comprehensive analysis.
+        </p>
+    </div>
+    """
+end
