@@ -5,12 +5,28 @@ module MissingDataViz
 # DEPENDENCIES
 # ================================================================
 using DataFrames
-using Makie
-using CairoMakie
 using Statistics
 using Dates
 using Base64
 using Base.Threads
+
+# ================================================================
+# CONDITIONAL LOADING OF PLOTTING PACKAGES
+# Workaround for CairoMakie precompilation issues on CI
+# ================================================================
+const PLOTTING_ENABLED = Ref(true)
+
+# Set environment before loading graphics packages
+if get(ENV, "CI", "false") == "true"
+    ENV["GKSwstype"] = "nul"
+    ENV["MPLBACKEND"] = "Agg"
+    @warn "CI detected - graphical backend set to headless mode"
+end
+
+# Now load plotting packages
+using Makie
+using CairoMakie
+
 # ================================================================
 # INCLUDES - Load source files in dependency order
 # ================================================================
