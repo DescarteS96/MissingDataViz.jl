@@ -1,3 +1,16 @@
+# ================================================================
+# CI WORKAROUND: Disable graphical precompilation
+# Fixes CairoMakie precompilation error on GitHub Actions
+# See: https://github.com/MakieOrg/Makie.jl/issues/XXXX
+# ================================================================
+ENV["JULIA_DEBUG"] = ""
+ENV["GKSwstype"] = "nul"
+ENV["MPLBACKEND"] = "Agg"
+
+if get(ENV, "CI", "false") == "true"
+    @info "Running on CI - graphical backend disabled"
+end
+
 using MissingDataViz
 using Test
 using DataFrames
