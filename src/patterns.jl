@@ -64,9 +64,8 @@ function missing_pattern(df::DataFrame)
     # Validate DataFrame
     validate_dataframe(df)
     
-    # OPTIMISATION: Broadcast direct - Julia gère l'optimisation
-    # Cette approche minimise les allocations et est plus rapide
-    # que les boucles manuelles pour ce cas d'usage
+    # OPTIMIZATION: Direct broadcast - Julia handles optimization internally
+    # This approach minimizes allocations and is faster than manual loops
     pattern = BitMatrix(Matrix(ismissing.(df)))
     
     return pattern
@@ -182,17 +181,17 @@ function pattern_counts(df::DataFrame)
     pattern_matrix = missing_pattern(df)
     n_rows = size(pattern_matrix, 1)
     
-    # OPTIMISATION 1: Pré-allocation avec hint de capacité
-    # On s'attend rarement à plus de 1000 patterns uniques
+    # OPTIMIZATION 1: Pre-allocation with capacity hint
+    # Rarely expect more than 1000 unique patterns
     counts = Dict{Vector{Bool}, Int}()
     sizehint!(counts, min(n_rows, 1000))
     
-    # OPTIMISATION 2: Vue + get() au lieu de haskey
+    # OPTIMIZATION 2: View + get() instead of haskey
     for i in 1:n_rows
-        # @view évite la copie, collect() fait une seule allocation
+        # @view avoids copy, collect() makes a single allocation
         row_pattern = collect(@view pattern_matrix[i, :])
         
-        # get() avec valeur par défaut est plus rapide que haskey + accès
+        # get() with default value is faster than haskey + access
         counts[row_pattern] = get(counts, row_pattern, 0) + 1
     end
     
@@ -222,30 +221,31 @@ function pattern_counts_parallel(df::DataFrame)
     pattern_matrix = missing_pattern(df)
     n_rows = size(pattern_matrix, 1)
     
-    # OPTIMISATION: Seuil pour parallélisation
-    # En dessous de 10k lignes, overhead > bénéfice
-    if n_rows < 10_000 || Threads.nthreads() == 1
-        # Utiliser version séquentielle optimisée
+    # OPTIMIZATION: Threshold for parallelization
+    # Below 10k rows, overhead > benefit
+    # Also check if threading is available
+    if n_rows < 10_000 || !isdefined(Base, :Threads) || Threads.nthreads() == 1
+        # Use optimized sequential version
         return pattern_counts(df)
     end
     
-    # Division du travail par thread
+    # Divide work per thread
     n_threads = Threads.nthreads()
     local_counts = [Dict{Vector{Bool}, Int}() for _ in 1:n_threads]
     
-    # Pré-allocation des dictionnaires locaux
+    # Pre-allocate local dictionaries
     for i in 1:n_threads
         sizehint!(local_counts[i], div(n_rows, n_threads) + 100)
     end
     
-    # OPTIMISATION: Traitement parallèle
+    # OPTIMIZATION: Parallel processing
     Threads.@threads for i in 1:n_rows
         tid = Threads.threadid()
         row_pattern = collect(@view pattern_matrix[i, :])
         local_counts[tid][row_pattern] = get(local_counts[tid], row_pattern, 0) + 1
     end
     
-    # Fusion des résultats locaux
+    # Merge local results
     final_counts = Dict{Vector{Bool}, Int}()
     sizehint!(final_counts, sum(length, local_counts))
     
@@ -324,13 +324,13 @@ function row_missing_stats(df::DataFrame)
     pattern = missing_pattern(df)
     n_rows, n_cols = size(pattern)
     
-    # OPTIMISATION 1: Pré-allocation du résultat
+    # OPTIMIZATION 1: Pre-allocate result vector
     row_percentages = Vector{Float64}(undef, n_rows)
     
-    # OPTIMISATION 2: Pré-calcul de la constante
+    # OPTIMIZATION 2: Pre-compute constant
     inv_ncols_100 = 100.0 / n_cols
     
-    # OPTIMISATION 3: Calcul direct en une passe avec vue
+    # OPTIMIZATION 3: Direct calculation in single pass with view
     for i in 1:n_rows
         row_sum = sum(@view pattern[i, :])
         @inbounds row_percentages[i] = row_sum * inv_ncols_100
