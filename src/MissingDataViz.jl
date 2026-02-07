@@ -2,30 +2,24 @@
 module MissingDataViz
 
 # ================================================================
+# CI WORKAROUND: Set headless mode BEFORE loading Makie
+# ================================================================
+if get(ENV, "CI", "false") == "true"
+    ENV["GKSwstype"] = "nul"
+    ENV["MPLBACKEND"] = "Agg"
+    ENV["JULIA_DEBUG"] = ""
+end
+
+# ================================================================
 # DEPENDENCIES
 # ================================================================
 using DataFrames
+using Makie
+using CairoMakie
 using Statistics
 using Dates
 using Base64
 using Base.Threads
-
-# ================================================================
-# CONDITIONAL LOADING OF PLOTTING PACKAGES
-# Workaround for CairoMakie precompilation issues on CI
-# ================================================================
-const PLOTTING_ENABLED = Ref(true)
-
-# Set environment before loading graphics packages
-if get(ENV, "CI", "false") == "true"
-    ENV["GKSwstype"] = "nul"
-    ENV["MPLBACKEND"] = "Agg"
-    @warn "CI detected - graphical backend set to headless mode"
-end
-
-# Now load plotting packages
-using Makie
-using CairoMakie
 
 # ================================================================
 # INCLUDES - Load source files in dependency order
@@ -88,7 +82,7 @@ export generate_html_report
 export diagnose_missing
 
 # ================================================================
-# EXPORTS - Validation & Error Handling (NEW - PARTIE 3)
+# EXPORTS - Validation & Error Handling
 # ================================================================
 
 # Custom error types
@@ -99,13 +93,13 @@ export InsufficientDataError
 
 # Validation functions
 export validate_dataframe
-export validate_figsize
-export validate_threshold
-export validate_numeric_columns
 
-# Helper functions for checks
-export check_all_missing_column
-export check_all_present_column
-export warn_large_dataset
+# Internal validation functions (NOT exported - used internally only)
+# - validate_figsize
+# - validate_threshold
+# - validate_numeric_columns
+# - check_all_missing_column
+# - check_all_present_column
+# - warn_large_dataset
 
 end # module MissingDataViz
