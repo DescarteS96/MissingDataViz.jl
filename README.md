@@ -214,10 +214,25 @@ Generate a comprehensive HTML report with missing data analysis and visualizatio
 
 ## Documentation
 
-- 📖 [User Guide](docs/USER_GUIDE.md) - Comprehensive guide with examples
-- 📚 [Getting Started](docs/src/getting-started.md) - Installation to first plot in 5 minutes
-- 💡 [Examples Gallery](examples/) - 3 complete working examples (basic, medical, workflow)
-- 🔗 [API Reference](https://DescarteS96.github.io/MissingDataViz.jl/stable/) - Detailed function documentation
+### Quick Reference
+- 📖 **[User Guide](docs/USER_GUIDE.md)** - Comprehensive guide with examples
+- 📚 **[Getting Started](docs/src/getting-started.md)** - Installation to first plot in 5 minutes
+- 💡 **[Examples Gallery](examples/)** - 3 complete working examples (basic, medical, workflow)
+- 🔗 **[API Reference](https://DescarteS96.github.io/MissingDataViz.jl/stable/)** - Detailed function documentation
+
+### Theoretical Guides (Phase 2 - MCAR Tests)
+- **[MCAR Means Test Guide](docs/guides/mcar_means_guide.md)**
+  - Welch t-test for single numeric predictor
+  - Mathematical foundations & interpretation
+  - Decision tree & common pitfalls
+
+- **[MCAR Logistic Regression Test Guide](docs/guides/mcar_logistic_guide.md)**
+  - Logistic regression for multiple predictors
+  - Handles categorical variables
+  - Odds ratios & coefficient interpretation
+  - Comparison with other tests
+
+*More guides coming soon: Little's Test*
 
 ---
 

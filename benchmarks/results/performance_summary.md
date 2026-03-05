@@ -1,4 +1,4 @@
-# MissingDataViz.jl - Performance Benchmark Report
+println("Observed age: ", count(!ismissing, df_mar_realistic.age))# MissingDataViz.jl - Performance Benchmark Report
 
 **Date:** 2026-02-02T00:46:05.341
 **Julia Version:** 1.12.0

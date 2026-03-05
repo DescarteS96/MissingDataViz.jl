@@ -1,6 +1,32 @@
-*.jl.*.cov
-*.jl.cov
-*.jl.mem
-/docs/Manifest*.toml
-/docs/build/
+# Julia generated files
 Manifest.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# Documenter.jl build artifacts
+docs/build/
+docs/build_*/
+docs/Manifest.toml
+
+# Generated outputs at root (test artifacts)
+/dashboard_*.png
+/full_dashboard_*.png
+/full_report_*.html
+/missing_dashboard.png
+/missing_report.html
+/report_*.html
+/test_mcar_*.png
+/test_output_*.png
+/test_report_*.html
+/medical_*.png
+/medical_*.html
+/medical_*.pdf
+
+# Generated outputs in examples/
+examples/*.png
+examples/*.html
+examples/validation/results/*.png
+
+# Data files (too large for git)
+data/*.csv

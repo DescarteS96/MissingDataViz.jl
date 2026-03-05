@@ -1,5 +1,5 @@
 # Benchmark script to measure optimization gains
-# Étape 7 Partie 4 - Optimisations ciblées
+# Step 7 Part 4 - Targeted optimizations
 
 using MissingDataViz
 using DataFrames
@@ -8,8 +8,8 @@ using Random
 using Printf
 
 println("="^70)
-println("BENCHMARKS DES OPTIMISATIONS - MissingDataViz.jl")
-println("Étape 7 Partie 4 : Optimisations ciblées")
+println("BENCHMARKS OF OPTIMIZATIONS - MissingDataViz.jl")
+println("Step 7 Part 4 : Targeted optimizations")
 println("="^70)
 println()
 
@@ -17,9 +17,9 @@ println()
 # CONFIGURATION
 # ================================================================
 
-Random.seed!(123)  # Pour reproductibilité
+Random.seed!(123)  # For reproducibility
 
-# Tailles de datasets à tester
+# Dataset sizes to test
 SIZES = [
     (rows=1_000,   cols=10,  name="Small (1k×10)"),
     (rows=10_000,  cols=20,  name="Medium (10k×20)"),
@@ -27,24 +27,24 @@ SIZES = [
     (rows=100_000, cols=50,  name="Very Large (100k×50)")
 ]
 
-# Taux de missing values à tester
+# Missing value rates to test
 MISSING_RATES = [0.1, 0.3, 0.5]  # 10%, 30%, 50%
 
 # ================================================================
-# FONCTIONS HELPER
+# HELPER FUNCTIONS
 # ================================================================
 
 """
-Génère un DataFrame avec un pourcentage contrôlé de missing values
+Generates a DataFrame with a controlled percentage of missing values
 """
 function generate_test_dataframe(n_rows::Int, n_cols::Int, missing_rate::Float64)
     df = DataFrame()
     
     for i in 1:n_cols
-        # CORRECTION: Créer un vecteur Union{Float64, Missing}
+        # FIX: Create a Union{Float64, Missing} vector
         col_data = Vector{Union{Float64, Missing}}(rand(n_rows))
         
-        # Injecter des missing values
+        # Inject missing values
         n_missing = round(Int, n_rows * missing_rate)
         if n_missing > 0
             missing_indices = randperm(n_rows)[1:n_missing]
@@ -58,7 +58,7 @@ function generate_test_dataframe(n_rows::Int, n_cols::Int, missing_rate::Float64
 end
 
 """
-Formate un temps en ms avec couleur selon seuil
+Formats a time in ms with color depending on threshold
 """
 function format_time(time_ns::Float64)
     time_ms = time_ns / 1_000_000
@@ -72,7 +72,7 @@ function format_time(time_ns::Float64)
 end
 
 """
-Calcule le gain en pourcentage
+Computes the speedup in percentage
 """
 function calc_speedup(old_time::Float64, new_time::Float64)
     speedup = (old_time / new_time - 1) * 100
@@ -84,7 +84,7 @@ end
 # ================================================================
 
 println("\n" * "="^70)
-println("BENCHMARK 1 : missing_pattern() - Conversion directe")
+println("BENCHMARK 1 : missing_pattern() - Direct conversion")
 println("="^70)
 println()
 println(@sprintf("%-20s %-15s %-15s %-12s", "Dataset", "Time", "Memory", "Allocs"))
@@ -105,18 +105,18 @@ for size_info in SIZES
 end
 
 # ================================================================
-# BENCHMARK 2 : pattern_counts() - Version optimisée
+# BENCHMARK 2 : pattern_counts() - Optimized version
 # ================================================================
 
 println("\n" * "="^70)
-println("BENCHMARK 2 : pattern_counts() - Vues + sizehint! + get()")
+println("BENCHMARK 2 : pattern_counts() - Views + sizehint! + get()")
 println("="^70)
 println()
 println(@sprintf("%-20s %-12s %-15s %-15s %-12s", 
                  "Dataset", "Missing%", "Time", "Memory", "Allocs"))
 println("-"^70)
 
-for size_info in SIZES[1:3]  # Skip 100k pour pattern_counts (trop lent)
+for size_info in SIZES[1:3]  # Skip 100k for pattern_counts (too slow)
     for missing_rate in MISSING_RATES
         df = generate_test_dataframe(size_info.rows, size_info.cols, missing_rate)
         
@@ -135,11 +135,11 @@ for size_info in SIZES[1:3]  # Skip 100k pour pattern_counts (trop lent)
 end
 
 # ================================================================
-# BENCHMARK 3 : row_missing_stats() - Pré-allocation
+# BENCHMARK 3 : row_missing_stats() - Pre-allocation
 # ================================================================
 
 println("\n" * "="^70)
-println("BENCHMARK 3 : row_missing_stats() - Pré-allocation + vue")
+println("BENCHMARK 3 : row_missing_stats() - Pre-allocation + view")
 println("="^70)
 println()
 println(@sprintf("%-20s %-15s %-15s %-12s", "Dataset", "Time", "Memory", "Allocs"))
@@ -160,12 +160,12 @@ for size_info in SIZES
 end
 
 # ================================================================
-# BENCHMARK 4 : pattern_counts_parallel() - Parallélisation
+# BENCHMARK 4 : pattern_counts_parallel() - Parallelization
 # ================================================================
 
 println("\n" * "="^70)
 println("BENCHMARK 4 : pattern_counts_parallel() - Multi-threading")
-println("Threads disponibles : $(Threads.nthreads())")
+println("Available threads : $(Threads.nthreads())")
 println("="^70)
 println()
 
@@ -174,18 +174,18 @@ if Threads.nthreads() > 1
                      "Dataset", "Sequential", "Parallel", "Speedup"))
     println("-"^70)
     
-    for size_info in SIZES[2:end]  # À partir de 10k lignes
+    for size_info in SIZES[2:end]  # Starting from 10k rows
         df = generate_test_dataframe(size_info.rows, size_info.cols, 0.3)
         
-        # Benchmark séquentiel
+        # Sequential benchmark
         bench_seq = @benchmark pattern_counts($df)
         time_seq = median(bench_seq.times)
         
-        # Benchmark parallèle
+        # Parallel benchmark
         bench_par = @benchmark pattern_counts_parallel($df)
         time_par = median(bench_par.times)
         
-        # Calcul du speedup
+        # Speedup calculation
         speedup = calc_speedup(time_seq, time_par)
         speedup_str = if speedup > 0
             @sprintf("+%.1f%%", speedup)
@@ -193,7 +193,7 @@ if Threads.nthreads() > 1
             @sprintf("%.1f%%", speedup)
         end
         
-        # Affichage
+        # Display
         println(@sprintf("%-20s %-20s %-20s %-15s", 
                          size_info.name, 
                          format_time(time_seq),
@@ -201,16 +201,16 @@ if Threads.nthreads() > 1
                          speedup_str))
     end
 else
-    println("⚠️  Parallélisation non testée : Julia lancé avec 1 seul thread")
-    println("   Pour tester : julia --threads=auto")
+    println("⚠️  Parallelization not tested : Julia launched with a single thread")
+    println("   To test : julia --threads=auto")
 end
 
 # ================================================================
-# BENCHMARK 5 : Workflow complet
+# BENCHMARK 5 : Complete workflow
 # ================================================================
 
 println("\n" * "="^70)
-println("BENCHMARK 5 : Workflow complet - summarize_missing()")
+println("BENCHMARK 5 : Complete workflow - summarize_missing()")
 println("="^70)
 println()
 println(@sprintf("%-20s %-15s %-15s", "Dataset", "Time", "Memory"))
@@ -230,34 +230,34 @@ for size_info in SIZES
 end
 
 # ================================================================
-# RÉSUMÉ FINAL
+# FINAL SUMMARY
 # ================================================================
 
 println("\n" * "="^70)
-println("RÉSUMÉ DES OPTIMISATIONS")
+println("SUMMARY OF OPTIMIZATIONS")
 println("="^70)
 println()
-println("✅ OPTIMISATION 1 : missing_pattern()")
-println("   → Conversion directe sans allocations intermédiaires")
-println("   → Gain estimé : 10-15%")
+println("✅ OPTIMIZATION 1 : missing_pattern()")
+println("   → Direct conversion without intermediate allocations")
+println("   → Estimated gain : 10-15%")
 println()
-println("✅ OPTIMISATION 2 : pattern_counts()")
-println("   → Vues (@view) au lieu de copies")
-println("   → Pré-allocation dictionnaire (sizehint!)")
-println("   → get() au lieu de haskey + accès")
-println("   → Gain estimé : 40-50%")
+println("✅ OPTIMIZATION 2 : pattern_counts()")
+println("   → Views (@view) instead of copies")
+println("   → Dictionary pre-allocation (sizehint!)")
+println("   → get() instead of haskey + access")
+println("   → Estimated gain : 40-50%")
 println()
-println("✅ OPTIMISATION 3 : row_missing_stats()")
-println("   → Pré-allocation du vecteur résultat")
-println("   → Pré-calcul de constantes")
-println("   → Vues pour éviter copies")
-println("   → Gain estimé : 5-10%")
+println("✅ OPTIMIZATION 3 : row_missing_stats()")
+println("   → Pre-allocation of the result vector")
+println("   → Pre-computation of constants")
+println("   → Views to avoid copies")
+println("   → Estimated gain : 5-10%")
 println()
-println("✅ OPTIMISATION 4 : pattern_counts_parallel()")
-println("   → Multi-threading pour datasets >10k lignes")
-println("   → Seuil adaptatif (overhead vs bénéfice)")
-println("   → Gain estimé : 50-200% (si ≥4 threads)")
+println("✅ OPTIMIZATION 4 : pattern_counts_parallel()")
+println("   → Multi-threading for datasets >10k rows")
+println("   → Adaptive threshold (overhead vs benefit)")
+println("   → Estimated gain : 50-200% (if ≥4 threads)")
 println()
 println("="^70)
-println("BENCHMARKS TERMINÉS")
+println("BENCHMARKS COMPLETED")
 println("="^70)

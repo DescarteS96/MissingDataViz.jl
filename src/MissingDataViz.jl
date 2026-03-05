@@ -51,6 +51,17 @@ include("reports/generate.jl")
 # 7. Main diagnosis workflow (depends on everything)
 include("diagnose.jl")
 
+# 8. MCAR statistical tests submodule (Phase 2)
+include("tests/MCARTests.jl")
+using .MCARTests
+
+# 9. MCAR results visualization (depends on MCARTests types)
+include("plots/mcar_results.jl")
+include("plots/dashboard.jl")
+
+# 10. All-in-one diagnosis pipeline (depends on everything above)
+include("full_diagnosis.jl")
+
 # ================================================================
 # EXPORTS - Pattern Detection Functions
 # ================================================================
@@ -73,13 +84,16 @@ export plot_missing_matrix
 export plot_missing_bars
 export plot_missing_correlation
 export plot_missing_overview
+export plot_mcar_test_results
 export missing_correlation
+export plot_missing_diagnosis
 
 # ================================================================
 # EXPORTS - Report Generation & Diagnosis
 # ================================================================
 export generate_html_report   
 export diagnose_missing
+export full_missing_diagnosis
 
 # ================================================================
 # EXPORTS - Validation & Error Handling
@@ -101,5 +115,23 @@ export validate_dataframe
 # - check_all_missing_column
 # - check_all_present_column
 # - warn_large_dataset
+
+# ================================================================
+# EXPORTS - MCAR Statistical Tests 
+# ================================================================
+
+# Result types
+export TestResult, MCARMechanism
+export MCAR_NOT_REJECTED, MCAR_REJECTED, INCONCLUSIVE
+
+# Test functions 
+export test_mcar_means, test_all_mcar_means
+export summary_table 
+export test_mcar_logistic
+export test_mcar_little
+export generate_mcar_data, generate_mar_data, generate_mnar_data
+export ValidationMetrics, describe_missing_mechanism
+export compare_mcar_tests, MCARTestComparison
+
 
 end # module MissingDataViz

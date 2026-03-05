@@ -316,7 +316,341 @@ using Random
             println("100k rows: $(round(time_taken, digits=2))s")
         end
     end
-    
+
+    # ================================================================
+    # MCAR TESTS — test_mcar_means
+    # ================================================================
+
+    @testset "MCAR Tests: test_mcar_means" begin
+
+        # ── Common fixtures ──────────────────────────────────────
+        Random.seed!(42)
+        df_mcar = generate_mcar_data(200, 4, 0.20; seed=42)
+        df_mar  = generate_mar_data(200, 4, 0.20; seed=42)
+        df_mnar = generate_mnar_data(200, 4, 0.20; seed=42)
+
+        # Complete column for testing on df_mcar
+        df_mcar_with_z = copy(df_mcar)
+        df_mcar_with_z.z = randn(MersenneTwister(42), 200)
+
+        # ── Test 1: MCAR should not reject ───────────────────────
+        @testset "MCAR data — should not reject" begin
+            r = test_mcar_means(df_mcar_with_z, :x1, :z)
+            @test r.decision == MCAR_NOT_REJECTED
+            @test r.pvalue > 0.05
+            @test r.test_name == "MCAR Means Test (Welch t-test)"
+            @test !isnan(r.statistic)
+            @test !isnan(r.pvalue)
+        end
+
+        # ── Test 2: MAR should reject ────────────────────────────
+        @testset "MAR data — should reject" begin
+            r = test_mcar_means(df_mar, :x2, :x1)
+            @test r.decision == MCAR_REJECTED
+            @test r.pvalue < 0.05
+            @test r.details["n_observed"] + r.details["n_missing"] == 200
+        end
+
+        # ── Test 3: TestResult structure ─────────────────────────
+        @testset "TestResult structure" begin
+            r = test_mcar_means(df_mar, :x2, :x1)
+            @test haskey(r.details, "n_observed")
+            @test haskey(r.details, "n_missing")
+            @test haskey(r.details, "mean_observed")
+            @test haskey(r.details, "mean_missing")
+            @test haskey(r.details, "mean_diff")
+            @test r.alpha == 0.05
+            @test r.degrees_of_freedom !== nothing
+            @test r.degrees_of_freedom > 0
+        end
+
+        # ── Test 4: Edge cases ───────────────────────────────────
+        @testset "Edge cases" begin
+            # Column without missing → INCONCLUSIVE
+            df_no_miss = DataFrame(
+                a = [1.0, 2.0, 3.0, 4.0],
+                b = [5.0, 6.0, 7.0, 8.0]
+            )
+            r = test_mcar_means(df_no_miss, :a, :b)
+            @test r.decision == INCONCLUSIVE
+
+            # col_complete with missing → ArgumentError
+            df_both_miss = DataFrame(
+                a = [1.0, missing, 3.0],
+                b = [missing, 2.0, 3.0]
+            )
+            @test_throws ArgumentError test_mcar_means(df_both_miss, :a, :b)
+
+            # Nonexistent column → ArgumentError
+            @test_throws ArgumentError test_mcar_means(df_mar, :nonexistent, :x1)
+
+            # Same column twice → ArgumentError
+            @test_throws ArgumentError test_mcar_means(df_mar, :x1, :x1)
+        end
+
+        # ── Test 5: Batch test_all_mcar_means ────────────────────
+        @testset "test_all_mcar_means" begin
+            results = test_all_mcar_means(df_mar)
+
+            # At least 1 test returned
+            @test length(results) >= 1
+
+            # At least 1 rejection on MAR data
+            @test any(r -> r.decision == MCAR_REJECTED, results)
+
+            # Results sorted by ascending p-value
+            pvals = [r.pvalue for r in results if !isnan(r.pvalue)]
+            @test issorted(pvals)
+
+            # Bonferroni correction: adjusted alpha ≤ 0.05
+            @test all(r -> r.alpha <= 0.05, results)
+        end
+
+        # ── Test 6: No correction ────────────────────────────────
+        @testset "test_all_mcar_means no correction" begin
+            results = test_all_mcar_means(df_mar; correction=:none)
+            @test all(r -> r.alpha == 0.05, results)
+        end
+
+        # ── Test 7: Small sample warnings ────────────────────────
+        @testset "Small sample warnings" begin
+            df_small = DataFrame(
+                a = [missing, 1.0, 2.0, missing, 3.0,
+                     missing, 4.0, 5.0, missing, 6.0],
+                b = collect(1.0:10.0)
+            )
+            r = test_mcar_means(df_small, :a, :b)
+            @test !isempty(r.warnings)
+        end
+
+        # ── Test 8: Outlier robustness ───────────────────────────
+        @testset "Outlier robustness" begin
+            Random.seed!(99)
+            df_outlier = generate_mcar_data(200, 2, 0.20; seed=99)
+            
+            # Add complete column with extreme outliers
+            z = randn(MersenneTwister(99), 200)
+            z[1] = 1000.0    # extreme outlier
+            z[2] = -1000.0   # extreme outlier
+            df_outlier.z = z
+
+            r = test_mcar_means(df_outlier, :x1, :z)
+
+            # Test should return valid result, not crash
+            @test r isa TestResult
+            @test !isnan(r.pvalue)
+            @test r.decision ∈ (MCAR_NOT_REJECTED, MCAR_REJECTED, INCONCLUSIVE)
+            
+            # With outliers on MCAR data, expect valid p-value
+            @test r.pvalue >= 0.0
+            @test r.pvalue <= 1.0
+        end
+
+    end
+
+    # ================================================================
+    # MCAR TESTS — summary_table
+    # ================================================================
+
+    @testset "summary_table conversion" begin
+        Random.seed!(42)
+        df_mar = generate_mar_data(200, 4, 0.20; seed=42)
+        results = test_all_mcar_means(df_mar)
+
+        # ── Test 1: Returns DataFrame ────────────────────────────
+        @testset "Returns DataFrame" begin
+            table = summary_table(results)
+            @test table isa DataFrame
+        end
+
+        # ── Test 2: Has expected columns ─────────────────────────
+        @testset "Has expected columns" begin
+            table = summary_table(results)
+            expected_cols = [:col_missing, :col_complete, :statistic, :pvalue, 
+                           :decision, :n_observed, :n_missing, :mean_diff]
+            @test all(c ∈ propertynames(table) for c in expected_cols)
+        end
+
+        # ── Test 3: Row count matches input ──────────────────────
+        @testset "Row count matches" begin
+            table = summary_table(results)
+            @test nrow(table) == length(results)
+        end
+
+        # ── Test 4: Empty input → empty DataFrame ────────────────
+        @testset "Empty input" begin
+            empty_table = summary_table(TestResult[])
+            @test empty_table isa DataFrame
+            @test nrow(empty_table) == 0
+        end
+
+        # ── Test 5: Decision strings are readable ────────────────
+        @testset "Decision formatting" begin
+            table = summary_table(results)
+            @test all(d ∈ ["MCAR_NOT_REJECTED", "MCAR_REJECTED", "INCONCLUSIVE"] 
+                     for d in table.decision)
+        end
+    end
+
+    # ================================================================
+    # MCAR TESTS — test_mcar_logistic
+    # ================================================================
+
+    @testset "MCAR Tests: test_mcar_logistic" begin
+
+        # ── Common fixtures ──────────────────────────────────────
+        Random.seed!(42)
+        df_mcar = generate_mcar_data(200, 4, 0.20; seed=42)
+        df_mar  = generate_mar_data(200, 4, 0.20; seed=42)
+
+        # ── Test 1: Basic functionality ──────────────────────────
+        @testset "Basic functionality" begin
+            r = test_mcar_logistic(df_mar, :x2)
+            @test r isa TestResult
+            @test r.test_name == "MCAR Logistic Regression Test"
+            @test !isnan(r.statistic)
+            @test !isnan(r.pvalue)
+        end
+
+        # ── Test 2: MAR data — should reject ─────────────────────
+        @testset "MAR data — should reject" begin
+            r = test_mcar_logistic(df_mar, :x2)
+            
+            # x1 should predict x2 missingness in MAR data
+            @test r.decision == MCAR_REJECTED
+            @test r.pvalue < 0.05
+            @test r.details["n_observed"] + r.details["n_missing"] == 200
+            @test !isempty(r.details["predictors"])
+        end
+
+        # ── Test 3: TestResult structure ─────────────────────────
+        @testset "TestResult structure" begin
+            r = test_mcar_logistic(df_mar, :x2)
+            
+            @test haskey(r.details, "n_observed")
+            @test haskey(r.details, "n_missing")
+            @test haskey(r.details, "col_missing")
+            @test haskey(r.details, "predictors")
+            @test haskey(r.details, "min_pvalue")
+            @test haskey(r.details, "significant_predictors")
+            @test haskey(r.details, "n_significant")
+            @test haskey(r.details, "model_deviance")
+            @test haskey(r.details, "formula")
+            
+            @test r.alpha == 0.05
+            @test r.degrees_of_freedom === nothing  # Logistic has no single df
+        end
+
+        # ── Test 4: Edge cases ───────────────────────────────────
+        @testset "Edge cases" begin
+            # No missing values → INCONCLUSIVE
+            df_no_miss = DataFrame(
+                a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                b = [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0]
+            )
+            r = test_mcar_logistic(df_no_miss, :a)
+            @test r.decision == INCONCLUSIVE
+            @test occursin("No missing", r.warnings[1])
+
+            # All missing → INCONCLUSIVE
+            df_all_miss = DataFrame(
+                a = [missing, missing, missing, missing, missing, missing, missing, missing, missing, missing],
+                b = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+            )
+            r_all = test_mcar_logistic(df_all_miss, :a)
+            @test r_all.decision == INCONCLUSIVE
+
+            # No fully observed predictors → INCONCLUSIVE
+            df_no_pred = DataFrame(
+                a = [1.0, missing, 3.0, 4.0, missing, 6.0, 7.0, missing, 9.0, 10.0],
+                b = [missing, 2.0, 3.0, missing, 5.0, 6.0, missing, 8.0, 9.0, missing],
+                c = [1.0, missing, 3.0, 4.0, missing, 6.0, 7.0, missing, 9.0, 10.0]
+            )
+            r_no_pred = test_mcar_logistic(df_no_pred, :a)
+            @test r_no_pred.decision == INCONCLUSIVE
+            @test occursin("No fully observed", r_no_pred.warnings[1])
+
+            # Nonexistent column → ArgumentError
+            @test_throws ArgumentError test_mcar_logistic(df_mar, :nonexistent)
+
+            # Too few observations → ArgumentError
+            df_tiny = DataFrame(a = [missing, 1.0], b = [2.0, 3.0])
+            @test_throws ArgumentError test_mcar_logistic(df_tiny, :a)
+        end
+
+        # ── Test 5: Significant predictors extraction ────────────
+        @testset "Significant predictors extraction" begin
+            r = test_mcar_logistic(df_mar, :x2)
+            
+            if r.decision == MCAR_REJECTED
+                @test r.details["n_significant"] >= 1
+                @test length(r.details["significant_predictors"]) >= 1
+                
+                # Check structure of significant_predictors
+                for pred in r.details["significant_predictors"]
+                    @test haskey(pred, "variable")
+                    @test haskey(pred, "coefficient")
+                    @test haskey(pred, "pvalue")
+                    @test haskey(pred, "odds_ratio")
+                    @test pred["pvalue"] < 0.05
+                end
+            end
+        end
+
+        # ── Test 6: Exclude columns functionality ────────────────
+        @testset "Exclude columns" begin
+            # Create dataset with 3 complete columns
+            df_multi = DataFrame(
+                target = [missing, 1.0, 2.0, missing, 3.0, 4.0, missing, 5.0, 6.0, 7.0,
+                         missing, 8.0, 9.0, missing, 10.0],
+                pred1 = collect(10.0:10.0:150.0),
+                pred2 = collect(100.0:100.0:1500.0),
+                pred3 = repeat(["A", "B", "C"], 5)
+            )
+            
+            # Test without exclusion
+            r1 = test_mcar_logistic(df_multi, :target)
+            @test "pred1" ∈ r1.details["predictors"]
+            @test "pred2" ∈ r1.details["predictors"]
+            
+            # Test with exclusion
+            r2 = test_mcar_logistic(df_multi, :target, exclude_cols=[:pred2])
+            @test "pred1" ∈ r2.details["predictors"]
+            @test "pred2" ∉ r2.details["predictors"]
+        end
+
+        # ── Test 7: Small sample warnings ─────────────────────────
+        @testset "Small sample warnings" begin
+            df_small = DataFrame(
+                a = [missing, 1.0, 2.0, missing, 3.0, 4.0, missing, 5.0, 6.0, 7.0],
+                b = collect(1.0:10.0)
+            )
+            r = test_mcar_logistic(df_small, :a)
+            @test !isempty(r.warnings)
+            @test any(w -> occursin("Small sample", w), r.warnings)
+        end
+
+        # ── Test 8: Categorical predictors ───────────────────────
+        @testset "Categorical predictors" begin
+            df_cat = DataFrame(
+                age = [25, missing, 30, missing, 35, 40, missing, 45, 50, missing,
+                       28, 32, missing, 38, 42],
+                income = Float64.(30000:5000:100000),
+                gender = repeat(["M", "F"], 8)[1:15]  
+            )
+
+            r = test_mcar_logistic(df_cat, :age)
+            
+            # Should handle categorical predictor
+            @test r isa TestResult
+            @test !isnan(r.pvalue)
+            
+            # Formula should include gender
+            @test occursin("gender", r.details["formula"])
+        end
+
+    end
+
     # ================================================================
     # VISUALIZATION TESTS
     # ================================================================
