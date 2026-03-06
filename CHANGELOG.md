@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Research & Documentation
+
+### Added
+
+#### Type I / Type II Error Simulations
+- Simulation script `benchmarks/simulations_type1_type2.jl`
+  - 1000 iterations per condition, seeds fixed for reproducibility
+  - Sample sizes: n ∈ {1000, 5000}
+  - Missing rates: 10%, 20%, 30%
+  - Alpha levels: α ∈ {0.01, 0.05, 0.10}
+- Key findings:
+  - Welch t-test: Type I = 0.0% across all 18 conditions — perfectly calibrated
+  - Little's test: Type I inflation 2.5%–50.1%, increases monotonically with missingness rate, independent of sample size
+  - Logistic regression: Type I inflated at 10–20% missing, nominal at 30%
+  - All tests: Power = 100% except Little's at 10% missing / n=1000 (98.2%)
+- Reports: `benchmarks/results/type1_type2_report.md` + `.docx`
+
+#### Cross-Language Performance Benchmarks
+- Benchmark suite `benchmarks/cross_language/`
+  - `generate_data.py`: generates 8 shared CSV datasets (3 synthetic + 5 real)
+  - `benchmark_julia.jl`: MissingDataViz.jl measurements
+  - `benchmark_python.py`: missingno measurements
+  - `benchmark_r.R`: naniar measurements
+  - `aggregate_results.py`: aggregates JSON results into comparative report
+  - `run_all.sh`: single-command execution of full suite
+- 10 runs per operation, median reported, Julia JIT warmup excluded
+- Key findings (matrix visualization):
+  - real_adult (32k rows): Julia 9.3x faster than Python
+  - real_diabetic (101k rows): Julia 19.7x faster than Python
+  - real_online_retail (541k rows): Julia **74.4x** faster than Python
+  - Memory at 541k rows: Julia 32 MB vs Python 182 MB
+- Documented naniar sampling limitation: `vis_miss` capped at 10k rows
+- Reports: `benchmarks/cross_language/results/cross_language_report.md` + `.docx`
+
+#### Synthetic Data Generator Extended
+- Added `generate_mnar_data()` for Missing Not At Random datasets
+- Validation with real datasets extended to 541,910-row Online Retail dataset
+
+#### Documentation
+- `README.md` rewritten for Phase 2:
+  - Feature comparison table (Julia vs Python vs R)
+  - Performance benchmark table with real numbers
+  - Calibration study results
+  - Complete API reference for Phase 2 functions
+- `paper.md` drafted for JOSS submission
+- `paper.bib` with 10 academic references
+- `docs/article/notes_results.md`: article draft notes with key sentences
+
+---
+
 ## [0.2.0] - 2026-03-04
 
 ### Added
@@ -66,19 +116,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Documentation (Phase 2)
 - Interpreting MCAR Tests guide for non-statisticians (`docs/interpreting_mcar_tests.md`)
-  - Decision tree: which test to use based on dataset characteristics
-  - Post-diagnostic actions: imputation strategies by scenario
-  - Common pitfalls to avoid
-  - 10 annotated academic references
 - Scalability limits guide (`benchmarks/results/SCALABILITY.md`)
-  - Row scaling, column scaling, data type impact
-  - JIT overhead, I/O bottleneck, memory considerations
-  - Parallelization status and roadmap
 
 #### Benchmarks
 - Performance benchmark script: `benchmarks/benchmark_mcar.jl`
 - Benchmark report: `benchmarks/results/benchmark_report.md`
-- Tested sizes: 1k, 5k, 10k, 50k, 100k rows × 8 columns
 - All performance targets met:
   - `compare_mcar_tests` @ 10k rows: 0.124s (target: < 5s)
   - Visualizations @ 10k rows: 0.247s (target: < 2s)
@@ -86,28 +128,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Double MCAR execution** (Fix 2A): `full_missing_diagnosis` called `compare_mcar_tests` twice — once directly, once via `plot_missing_diagnosis`. Added `mcar_results` parameter to pass pre-computed results. **Result: 81% reduction in pipeline time** (12.52s → 2.35s on 1k-row test).
-- **Little's test silent NaN** (Fix 2B): When missing data exists only in categorical columns, the test now returns INCONCLUSIVE with a descriptive message identifying the affected columns and recommending alternative tests, instead of a silent NaN p-value.
-- **Column name sanitization** (Fix 2C): Column names with spaces (`Customer ID`), special characters (`région (%)`), or leading digits (`2024_score`) caused `ParseError` in logistic regression formula construction. Names are now auto-sanitized in `compare_mcar_tests` with original names restored in results.
+- **Double MCAR execution** (Fix 2A): 81% reduction in pipeline time (12.52s → 2.35s)
+- **Little's test silent NaN** (Fix 2B): Returns INCONCLUSIVE with descriptive message
+- **Column name sanitization** (Fix 2C): Auto-sanitization in `compare_mcar_tests`
 
 ### Changed
 
-- `plot_missing_diagnosis` now accepts optional `mcar_results` kwarg to avoid re-running MCAR tests
-- `_draw_mcar_panel!` now accepts optional `mcar_results` kwarg
+- `plot_missing_diagnosis` now accepts optional `mcar_results` kwarg
 - HTML report generation accepts pre-computed `mcar_results` from pipeline
 
 ### Dependencies Added
-- GLM.jl (logistic regression)
-- Distributions.jl (chi-squared distribution for Little's test)
-- HypothesisTests.jl (Welch t-tests)
-- CSV.jl (validation script dependency)
-
-### Technical Details
-- **New modules**: `MCARTests` (encapsulates all MCAR test functionality)
-- **New files**: `src/tests/mcar_little.jl`, `src/tests/mcar_means.jl`, `src/tests/mcar_logistic.jl`, `src/tests/mcar_comparison.jl`, `src/tests/mcar_types.jl`, `src/plots/dashboard.jl`, `src/full_diagnosis.jl`, `src/generators.jl`
-- **Julia Compatibility**: 1.9+ (tested on 1.11.5; CairoMakie incompatible with 1.12 at time of release)
-- **Performance**: Sub-linear scaling — 100k rows processed in < 1s for MCAR tests
-- **Scalability bottleneck**: Column count (not row count) — datasets with > 20 columns with missing data may be slow
+- GLM.jl, Distributions.jl, HypothesisTests.jl, CSV.jl
 
 ---
 
@@ -117,59 +148,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Core Functionality
 - Pattern detection module with 11 functions for missing data analysis
-  - `missing_pattern()`: Convert DataFrame to binary matrix
-  - `missing_percentage()`: Calculate percentage of missing values per column
-  - `missing_count()`: Count absolute missing values
-  - `pattern_counts()`: Identify and count distinct patterns
-  - `pattern_frequency()`: Rank patterns by frequency
-  - `summarize_missing()`: Aggregate all statistics
+  - `missing_pattern()`, `missing_percentage()`, `missing_count()`
+  - `pattern_counts()`, `pattern_frequency()`, `summarize_missing()`
 
 #### Visualizations
-- Heatmap visualization (`plot_missing_matrix`) with customizable options
-  - Automatic sparklines showing missing percentage per row
-  - Smart column label rotation for large datasets
-  - Configurable color schemes and dimensions
-- Bar chart visualization (`plot_missing_bars`)
-  - Percentage of missing values per column
-  - Automatic sorting and color-coded thresholds
-  - Horizontal/vertical orientation support
-- Correlation matrix (`plot_missing_correlation`)
-  - Pearson correlation between missing data patterns
-  - Diverging colormap for negative/positive correlations
-  - Numeric annotations for small matrices
-- Overview function (`plot_missing_overview`) combining all visualizations
+- `plot_missing_matrix()` — heatmap with sparklines
+- `plot_missing_bars()` — bar chart with color-coded thresholds
+- `plot_missing_correlation()` — Pearson correlation between patterns
+- `plot_missing_overview()` — combined dashboard
 
 #### Export & Reporting
-- Multi-format export support (PNG, PDF, SVG)
-- Automatic HTML report generation with embedded plots
+- Multi-format export (PNG, PDF, SVG)
+- HTML report generation with embedded plots
 - One-line diagnosis function (`diagnose_missing`)
-- Base64-encoded images in HTML reports
 
 #### Quality & Performance
-- 95 automated tests with ~90% code coverage
-- Performance optimization: 98% fewer allocations, 79% faster execution
-- Benchmark: <1s for 10k rows, <3s for 100k rows
-- 11 validation and error handling functions
-- 3 custom error types with actionable messages
-
-#### Documentation
-- Complete API documentation with Documenter.jl
-- "Getting Started" tutorial
-- 10+ working examples in `examples/` directory
-- Gallery of visual outputs
-- FAQ and troubleshooting guide
+- 95 automated tests, ~90% code coverage
+- 98% fewer allocations vs naive implementation
+- Benchmark: < 1s for 10k rows, < 3s for 100k rows
 
 #### Infrastructure
-- CI/CD with GitHub Actions (Julia 1.9, 1.10+)
-- Codecov integration for coverage tracking
-- Automated documentation deployment
-- Comprehensive test suite with edge cases
+- CI/CD with GitHub Actions
+- Codecov integration
+- Documenter.jl API docs
 
 ### Technical Details
 - **Dependencies**: DataFrames.jl, Makie.jl, CairoMakie.jl
 - **Julia Compatibility**: 1.9+
-- **Test Coverage**: ~90%
-- **Performance Target**: <2s for standard datasets (10k rows)
 
+[Unreleased]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/DescarteS96/MissingDataViz.jl/releases/tag/v0.1.0
