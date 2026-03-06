@@ -15,6 +15,7 @@ authors:
     orcid: 0009-0006-9251-4982
   - name: Dr. İsmail YENİLMEZ
     affiliation: 1
+    orcid: 0000-0002-3357-3898
 affiliations:
   - index: 1
     name: Eskişehir Technical University, Science Faculty, Department of Statistics
