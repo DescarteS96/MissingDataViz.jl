@@ -30,3 +30,4 @@ examples/validation/results/*.png
 
 # Data files (too large for git)
 data/*.csv
+benchmarks/cross_language/data/
