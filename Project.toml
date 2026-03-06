@@ -1,6 +1,9 @@
 name = "MissingDataViz"
 uuid = "63ac8797-bce4-4763-99a7-d88834fad9f5"
-authors = ["Rene Fassou Ballamou <renefassouballamou96@gmail.com>"]
+authors = [
+    "Rene Fassou Ballamou <renefassouballamou96@gmail.com>",
+    "Dr. İsmail YENİLMEZ <ismailyenilmez@eskisehir.edu.tr>"
+]
 repo = "https://github.com/DescarteS96/MissingDataViz.jl"
 version = "0.1.0"
 
@@ -14,6 +17,7 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 HypothesisTests = "09f84164-cd44-5f33-b23f-e6b0d136a0d5"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -29,6 +33,7 @@ DataFrames = "1.6"
 Distributions = "0.25.123"
 GLM = "1.9.3"
 HypothesisTests = "0.11.6"
+JSON3 = "1.14.3"
 LinearAlgebra = "1.11.0"
 Makie = "0.20, 0.21"
 Random = "1.11.0"

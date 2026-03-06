@@ -154,11 +154,11 @@ Depth = 2
 
 If you use MissingDataViz.jl in your research, please cite:
 ```bibtex
-@software{missingdataviz2025,
-  author = {Ballamou, Rene Fassou},
-  title = {MissingDataViz.jl: Missing Data Visualization for Julia},
-  year = {2025},
-  url = {https://github.com/DescarteS96/MissingDataViz.jl}
+@software{missingdataviz2026,
+  author = {Ballamou, Rene Fassou and Yenilmez, Ismail},
+  title  = {MissingDataViz.jl: Missing Data Visualization for Julia},
+  year   = {2026},
+  url    = {https://github.com/DescarteS96/MissingDataViz.jl}
 }
 ```
 
