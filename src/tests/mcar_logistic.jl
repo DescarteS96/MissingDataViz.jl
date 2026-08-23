@@ -23,6 +23,7 @@
 
 using DataFrames
 using GLM
+using CategoricalArrays
 using Statistics
 
 """
@@ -164,7 +165,7 @@ function test_mcar_logistic(
                 "n_missing"  => n_missing,
                 "reason"     => "No predictor columns with ≥80% observed values"
             ),
-            ["No predictor columns with sufficient data (≥80% observed) — cannot fit model"]
+            ["No fully observed predictor columns available — cannot fit logistic model"]
         )
     end
 
@@ -206,6 +207,13 @@ function test_mcar_logistic(
             "$(n_dropped) rows dropped due to missing predictor values (complete case analysis).")
     end
 
+    # Convert String columns to CategoricalArray for GLM dummy coding
+    for col in names(df_model)
+        if col != "y" && eltype(df_model[!, col]) <: Union{String, AbstractString}
+            df_model[!, col] = categorical(df_model[!, col])
+        end
+    end
+
     # Fit logistic regression
     model = try
         glm(formula_obj, df_model, Binomial(), LogitLink())
@@ -219,6 +227,7 @@ function test_mcar_logistic(
                 "n_observed" => n_observed,
                 "n_missing"  => n_missing,
                 "predictors" => string.(predictors),
+                "formula"     => formula_str,
                 "reason"     => "Model fitting failed: $(typeof(e))"
             ),
             ["Model fitting failed — possible perfect separation or collinearity"]
