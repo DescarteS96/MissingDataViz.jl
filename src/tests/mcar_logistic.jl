@@ -185,7 +185,7 @@ function test_mcar_logistic(
     df_model      = df_model[complete_rows, :]
 
     # Guard: ensure sufficient complete cases remain after dropping
-    if nrow(df_model) < 20
+    if nrow(df_model) < 10
         return TestResult(
             "MCAR Logistic Regression Test",
             NaN, NaN, alpha,
@@ -207,10 +207,15 @@ function test_mcar_logistic(
             "$(n_dropped) rows dropped due to missing predictor values (complete case analysis).")
     end
 
-    # Convert String columns to CategoricalArray for GLM dummy coding
+    # Convert String and non-numeric non-Float columns to CategoricalArray for GLM dummy coding
     for col in names(df_model)
-        if col != "y" && eltype(df_model[!, col]) <: Union{String, AbstractString}
-            df_model[!, col] = categorical(df_model[!, col])
+        if col != "y"
+            col_type = eltype(df_model[!, col])
+            if col_type <: Union{String, AbstractString} || col_type <: Union{Missing, String, AbstractString}
+                df_model[!, col] = categorical(df_model[!, col])
+            elseif nonmissingtype(col_type) <: CategoricalValue
+                df_model[!, col] = categorical(df_model[!, col])
+            end
         end
     end
 
