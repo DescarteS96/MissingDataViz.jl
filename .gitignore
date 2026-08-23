@@ -32,3 +32,4 @@ examples/validation/results/*.png
 data/*.csv
 benchmarks/cross_language/data/
 **/.Rhistory
+Manifest.toml
