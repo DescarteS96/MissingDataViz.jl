@@ -47,6 +47,8 @@ Pkg.add("MissingDataViz")
 
 ---
 
+> **Julia compatibility:** MissingDataViz.jl requires **Julia 1.9–1.11**. Julia 1.12 is not yet supported due to a CairoMakie incompatibility. Use Julia 1.11.5 (recommended).
+
 ## Quick Start
 
 ### One-line diagnosis
