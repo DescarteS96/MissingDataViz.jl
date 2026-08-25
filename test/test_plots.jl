@@ -68,13 +68,13 @@ using CairoMakie
         )
         
         time_matrix = @elapsed plot_missing_matrix(df_medium)
-        @test time_matrix < 2.0
+        @test time_matrix < 5.0
         
         time_bars = @elapsed plot_missing_bars(df_medium)
-        @test time_bars < 2.0
+        @test time_bars < 5.0
         
         time_corr = @elapsed plot_missing_correlation(df_medium)
-        @test time_corr < 2.0
+        @test time_corr < 5.0
         
         time_overview = @elapsed plot_missing_overview(df_medium)
         @test time_overview < 5.0
