@@ -75,7 +75,7 @@ function run_simulation(
 
     for i in 1:n_iter
         df = if mechanism == :MCAR
-            generate_mcar_data(n_rows, n_cols, miss_rate; seed=i)
+            generate_mcar_data(n_rows, n_cols, miss_rate; seed=i, n_complete_cols=1)
         else
             generate_mar_data(n_rows, n_cols, miss_rate; seed=i)
         end

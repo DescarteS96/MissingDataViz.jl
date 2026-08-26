@@ -157,31 +157,31 @@ function generate_mcar_data(
     n_rows::Int,
     n_cols::Int,
     missing_rate::Float64;
-    seed::Int = 42
+    seed::Int = 42,
+    n_complete_cols::Int = 0
 )::DataFrame
     @assert 0.0 < missing_rate < 1.0 "missing_rate must be between 0 and 1"
     @assert n_rows >= 30 "n_rows must be at least 30 for reliable testing"
     @assert n_cols >= 2 "n_cols must be at least 2"
+    @assert 0 <= n_complete_cols < n_cols "n_complete_cols must be in [0, n_cols)"
 
     rng = MersenneTwister(seed)
 
-    # Generate base data: each column ~ N(0,1), independent
-    data = Dict{Symbol, Vector{Union{Float64, Missing}}}()
+    # Use ordered pairs to guarantee column order x1, x2, ...
+    cols = Pair{Symbol, Vector{Union{Float64, Missing}}}[]
 
     for j in 1:n_cols
-        col_name = Symbol("x$j")
-        values = randn(rng, n_rows)
-        col = Vector{Union{Float64, Missing}}(values)
-
-        # Randomly select positions to make missing (MCAR: pure random)
-        n_missing = round(Int, n_rows * missing_rate)
-        missing_idx = randperm(rng, n_rows)[1:n_missing]
-        col[missing_idx] .= missing
-
-        data[col_name] = col
+        col = Vector{Union{Float64, Missing}}(randn(rng, n_rows))
+        # First n_complete_cols columns are left fully observed (no missing)
+        if j > n_complete_cols
+            n_missing = round(Int, n_rows * missing_rate)
+            missing_idx = randperm(rng, n_rows)[1:n_missing]
+            col[missing_idx] .= missing
+        end
+        push!(cols, Symbol("x$j") => col)
     end
 
-    return DataFrame(data)
+    return DataFrame(cols)
 end
 
 # ================================================================
