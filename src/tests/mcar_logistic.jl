@@ -4,16 +4,20 @@
 # Principle:
 #   Create a binary outcome variable indicating whether col_missing
 #   is missing (1) or observed (0). Fit a logistic regression model
-#   predicting this outcome from all other fully observed columns.
+#   predicting this outcome from all other sufficiently observed columns.
 #
-#   H0 (MCAR): No predictor significantly predicts missingness.
+#   H0 (MCAR): all predictor coefficients are zero — missingness is
+#   not predictable from the observed variables.
 #
-#   If any predictor has p < alpha, that variable is associated with
-#   missingness → evidence against MCAR.
+#   The decision is based on a GLOBAL likelihood ratio test comparing
+#   the fitted model against the intercept-only model. Individual
+#   predictor p-values are reported for interpretation but do NOT
+#   drive the decision: selecting on min(p) across k predictors
+#   inflates Type I error to 1 - (1-alpha)^k.
 #
 # Advantages over test_mcar_means:
 #   - Handles categorical predictors (via dummy coding)
-#   - Tests multiple predictors simultaneously
+#   - Tests multiple predictors simultaneously in a single global test
 #   - Controls for confounding (adjusted effects)
 #
 # Limitations:
@@ -25,6 +29,7 @@ using DataFrames
 using GLM
 using CategoricalArrays
 using Statistics
+using Distributions
 
 """
     test_mcar_logistic(df, col_missing; alpha=0.05, exclude_cols=Symbol[]) -> TestResult
@@ -41,6 +46,12 @@ Then fits: logit(P(y=1)) = β₀ + β₁*x₁ + β₂*x₂ + ...
 where x₁, x₂, ... are all other columns with ≥80% observed values.
 Rows where a predictor is missing are dropped (complete case analysis).
 
+The MCAR decision comes from a global likelihood ratio test of
+H0: β₁ = β₂ = ... = βₖ = 0, comparing the fitted model against the
+intercept-only model. The LR statistic follows a chi-squared
+distribution with k degrees of freedom under H0, where k is the
+number of estimated predictor coefficients.
+
 # Arguments
 - `df::DataFrame`: Input dataset.
 - `col_missing::Symbol`: Column whose missingness is being tested.
@@ -50,19 +61,28 @@ Rows where a predictor is missing are dropped (complete case analysis).
 # Returns
 A `TestResult` with:
 - `test_name`: `"MCAR Logistic Regression Test"`
-- `statistic`: Deviance statistic (model fit)
-- `pvalue`: Minimum p-value among all predictors
-- `details`: Full coefficient table, significant predictors, model summary
+- `statistic`: Likelihood ratio statistic (null deviance − model deviance)
+- `pvalue`: Global p-value from the likelihood ratio test
+- `degrees_of_freedom`: Number of estimated predictor coefficients
+- `details`: Coefficient table, significant predictors, model summary,
+  and `min_pvalue` (reported for interpretation only)
 - `warnings`: Warnings for small samples, separation issues, dropped rows, etc.
 
 # Raises
-- `ArgumentError` if col_missing not in df
-- `ArgumentError` if no suitable predictor columns available
-- `ArgumentError` if fewer than 10 observations total
+- `ArgumentError` if `col_missing` is not in `df`
+- `ArgumentError` if `df` has fewer than 10 rows
+
+Edge cases (no missing values, all values missing, no usable predictors,
+model fitting failure) return an `INCONCLUSIVE` `TestResult` rather than
+throwing.
 
 # Interpretation
-- If ANY predictor has p < alpha → MCAR rejected
-- If ALL predictors have p ≥ alpha → MCAR not rejected
+- Global LR test p < alpha → MCAR rejected
+- Global LR test p ≥ alpha → MCAR not rejected
+
+Individual predictor p-values in `details["significant_predictors"]`
+identify *which* variables are associated with missingness — useful for
+building an imputation model — but are not used to decide.
 
 # Example
 ```julia
@@ -71,7 +91,7 @@ result = test_mcar_logistic(df, :x2)
 println(result)
 # Check which variables predict missingness:
 for pred in result.details["significant_predictors"]
-    println("⚠️  \$(pred[:variable]) predicts missingness (p=\$(pred[:pvalue]))")
+    println("⚠️  \$(pred["variable"]) predicts missingness (p=\$(pred["pvalue"]))")
 end
 ```
 """
@@ -148,6 +168,11 @@ function test_mcar_logistic(
     # spread across all columns and no column is fully complete.
     # Rows where a predictor is still missing will be dropped in Step 5
     # (complete case analysis at the row level, not column level).
+    #
+    # NOTE: this threshold determines how many predictors enter the model,
+    # which in turn sets the degrees of freedom of the global LR test.
+    # It is a deliberate trade-off between model richness and the number
+    # of complete cases retained.
     MIN_OBS_RATIO = 0.80
 
     predictors = filter(predictor_candidates) do col
@@ -165,7 +190,7 @@ function test_mcar_logistic(
                 "n_missing"  => n_missing,
                 "reason"     => "No predictor columns with ≥80% observed values"
             ),
-            ["No fully observed predictor columns available — cannot fit logistic model"]
+            ["No sufficiently observed predictor columns available — cannot fit logistic model"]
         )
     end
 
@@ -194,7 +219,7 @@ function test_mcar_logistic(
                 "n_observed" => n_observed,
                 "n_missing"  => n_missing,
                 "reason"     => "Too few complete cases after dropping missing predictors " *
-                                "($(nrow(df_model)) < 20)"
+                                "($(nrow(df_model)) < 10)"
             ),
             ["Insufficient complete cases for model fitting — $(nrow(df_model)) rows available"]
         )
@@ -232,17 +257,16 @@ function test_mcar_logistic(
                 "n_observed" => n_observed,
                 "n_missing"  => n_missing,
                 "predictors" => string.(predictors),
-                "formula"     => formula_str,
+                "formula"    => formula_str,
                 "reason"     => "Model fitting failed: $(typeof(e))"
             ),
             ["Model fitting failed — possible perfect separation or collinearity"]
         )
     end
 
-    # ── 6. EXTRACT RESULTS WITH CONFIDENCE INTERVALS ────────────
+    # ── 6. EXTRACT COEFFICIENTS WITH CONFIDENCE INTERVALS ────────
     coef_table = coeftable(model)
 
-    # Get p-values for all predictors (exclude intercept)
     # coeftable structure: rows = coefficients, columns = [Estimate, Std.Error, z, Pr(>|z|)]
     coef_names   = coef_table.rownms
     coef_values  = coef_table.cols[1]     # Coefficients
@@ -254,8 +278,8 @@ function test_mcar_logistic(
     predictor_pvalues      = coef_pvalues[predictor_indices]
     predictor_names_actual = coef_names[predictor_indices]
 
-    # Find minimum p-value
-    min_pvalue = minimum(predictor_pvalues)
+    # Minimum p-value — reported for interpretation only, NOT used to decide.
+    min_pvalue = isempty(predictor_pvalues) ? NaN : minimum(predictor_pvalues)
 
     # Identify significant predictors with 95% confidence intervals
     significant_predictors = []
@@ -277,46 +301,79 @@ function test_mcar_logistic(
             ci_upper_or = exp(ci_upper_coef)
 
             push!(significant_predictors, Dict(
-                "variable"     => predictor_names_actual[i],
-                "coefficient"  => coef_val,
-                "std_error"    => std_err,
-                "pvalue"       => predictor_pvalues[i],
-                "odds_ratio"   => or_val,
+                "variable"      => predictor_names_actual[i],
+                "coefficient"   => coef_val,
+                "std_error"     => std_err,
+                "pvalue"        => predictor_pvalues[i],
+                "odds_ratio"    => or_val,
                 "ci_lower_coef" => ci_lower_coef,
                 "ci_upper_coef" => ci_upper_coef,
-                "ci_lower_or"  => ci_lower_or,
-                "ci_upper_or"  => ci_upper_or
+                "ci_lower_or"   => ci_lower_or,
+                "ci_upper_or"   => ci_upper_or
             ))
         end
     end
 
-    # Model deviance as test statistic
+    # ── 7. GLOBAL LIKELIHOOD RATIO TEST ──────────────────────────
+    # H0: all predictor coefficients are zero (missingness is unpredictable).
+    # LR = deviance(null) - deviance(full) ~ Chisq(k) under H0,
+    # where k is the number of estimated predictor coefficients.
+    #
+    # The decision must NOT be based on min(p-values) across predictors:
+    # with k predictors that inflates Type I error to 1 - (1-alpha)^k
+    # (e.g. 18.5% at alpha=0.05, k=4).
     deviance_stat = deviance(model)
+    df_lr = length(predictor_indices)
 
-    # ── 7. DECISION ──────────────────────────────────────────────
-    # If ANY predictor significant → reject MCAR
-    decision = min_pvalue < alpha ? MCAR_REJECTED : MCAR_NOT_REJECTED
+    lr_stat, global_pvalue = if df_lr == 0
+        push!(warnings, "No predictor coefficients estimated — global test undefined.")
+        (NaN, NaN)
+    else
+        try
+            d0 = nulldeviance(model)
+            s  = max(d0 - deviance_stat, 0.0)
+            (s, ccdf(Chisq(df_lr), s))
+        catch
+            push!(warnings,
+                "Null deviance unavailable; falling back to minimum predictor p-value. " *
+                "Type I error may be inflated.")
+            (NaN, min_pvalue)
+        end
+    end
 
-    # ── 8. DETAILS ───────────────────────────────────────────────
+    # ── 8. DECISION ──────────────────────────────────────────────
+    decision = if isnan(global_pvalue)
+        INCONCLUSIVE
+    elseif global_pvalue < alpha
+        MCAR_REJECTED
+    else
+        MCAR_NOT_REJECTED
+    end
+
+    # ── 9. DETAILS ───────────────────────────────────────────────
     details = Dict{String, Any}(
-        "n_observed"            => n_observed,
-        "n_missing"             => n_missing,
-        "col_missing"           => string(col_missing),
-        "predictors"            => string.(predictors),
-        "min_pvalue"            => round(min_pvalue, digits=4),
+        "n_observed"             => n_observed,
+        "n_missing"              => n_missing,
+        "n_model_rows"           => nrow(df_model),
+        "col_missing"            => string(col_missing),
+        "predictors"             => string.(predictors),
+        "lr_statistic"           => isnan(lr_stat) ? NaN : round(lr_stat, digits=4),
+        "global_pvalue"          => isnan(global_pvalue) ? NaN : round(global_pvalue, digits=6),
+        "df"                     => df_lr,
+        "min_pvalue"             => isnan(min_pvalue) ? NaN : round(min_pvalue, digits=4),
         "significant_predictors" => significant_predictors,
-        "n_significant"         => length(significant_predictors),
-        "model_deviance"        => round(deviance_stat, digits=4),
-        "formula"               => formula_str
+        "n_significant"          => length(significant_predictors),
+        "model_deviance"         => round(deviance_stat, digits=4),
+        "formula"                => formula_str
     )
 
     return TestResult(
         "MCAR Logistic Regression Test",
-        deviance_stat,
-        min_pvalue,
+        lr_stat,
+        global_pvalue,
         alpha,
         decision,
-        nothing,  # No single df for logistic regression
+        Float64(df_lr),
         details,
         warnings
     )
@@ -332,7 +389,7 @@ end
 Generate a human-readable interpretation of logistic regression test results.
 
 Returns a formatted text summary including:
-- Overall MCAR decision with scientifically accurate MAR/MNAR distinction
+- Overall MCAR decision (from the global LR test) with MAR/MNAR distinction
 - List of significant predictors with odds ratio interpretation
 - Recommended imputation strategy
 - Sensitivity analysis guidance
@@ -344,62 +401,6 @@ result = test_mcar_logistic(df, :age)
 interpretation = interpret_logistic_result(result)
 println(interpretation)
 ```
-
-# Output (MCAR Rejected)
-```
-═══════════════════════════════════════════════════════════
-MCAR LOGISTIC REGRESSION TEST - INTERPRETATION
-═══════════════════════════════════════════════════════════
-
-OVERALL DECISION: MCAR_REJECTED
-MCAR assumption is VIOLATED.
-Missingness in 'age' is predicted by other observed variables.
-
-Possible mechanisms:
-  • MAR (Missing At Random):
-    Missingness depends on OBSERVED variables
-    → Evidence: Significant predictors detected in this test
-  • MNAR (Missing Not At Random):
-    Missingness may ALSO depend on UNOBSERVED values
-    → Cannot be detected or ruled out by statistical tests
-
-IMPORTANT: Statistical tests can only REJECT MCAR.
-They CANNOT distinguish between MAR and MNAR.
-Both mechanisms may be present simultaneously.
-
-Next steps:
-  • MAR: Use advanced imputation (MICE, regression) - see RECOMMENDATION
-  • MNAR: Requires domain knowledge + sensitivity analysis
-  • Consider: Could unobserved values also predict missingness?
-
-SIGNIFICANT PREDICTORS (p < 0.05):
-────────────────────────────────────────────────────────────
-  • income (p = 0.0075)
-    - Coefficient: 0.0001
-    - Odds Ratio: 1.0001
-    - Interpretation: For each unit increase in income,
-      the odds of being missing increase by 0.0%.
-    - Effect: No effect
-
-RECOMMENDATION:
-Use advanced imputation methods that account for MAR:
-  • Multiple Imputation by Chained Equations (MICE)
-  • Regression imputation using significant predictors:
-    → Include: income
-  • Inverse probability weighting
-
-Consider MNAR sensitivity analysis:
-  • Pattern-mixture models
-  • Selection models
-  • Tipping point analysis
-  • Expert elicitation on unobserved mechanisms
-
-Avoid: Simple mean/median imputation (will introduce bias)
-
-WARNINGS:
-  ⚠ None
-═══════════════════════════════════════════════════════════
-```
 """
 function interpret_logistic_result(result::TestResult)::String
     io = IOBuffer()
@@ -409,6 +410,15 @@ function interpret_logistic_result(result::TestResult)::String
     println(io, "MCAR LOGISTIC REGRESSION TEST - INTERPRETATION")
     println(io, "═"^63)
     println(io)
+
+    # Global test summary
+    if !isnan(result.pvalue)
+        lr  = get(result.details, "lr_statistic", NaN)
+        dfr = get(result.details, "df", "N/A")
+        println(io, "GLOBAL LIKELIHOOD RATIO TEST:")
+        println(io, "  LR statistic = $lr, df = $dfr, p = $(round(result.pvalue, digits=4))")
+        println(io)
+    end
 
     # Overall Decision
     println(io, "OVERALL DECISION: $(uppercase(string(result.decision)))")
@@ -421,7 +431,7 @@ function interpret_logistic_result(result::TestResult)::String
         println(io, "Possible mechanisms:")
         println(io, "  • MAR (Missing At Random):")
         println(io, "    Missingness depends on OBSERVED variables")
-        println(io, "    → Evidence: Significant predictors detected in this test")
+        println(io, "    → Evidence: global model is significant")
         println(io, "  • MNAR (Missing Not At Random):")
         println(io, "    Missingness may ALSO depend on UNOBSERVED values")
         println(io, "    → Cannot be detected or ruled out by statistical tests")
@@ -437,7 +447,7 @@ function interpret_logistic_result(result::TestResult)::String
 
     elseif result.decision == MCAR_NOT_REJECTED
         println(io, "No significant evidence against MCAR detected.")
-        println(io, "Among TESTED variables, none predict missingness.")
+        println(io, "The global model does not predict missingness better than chance.")
         println(io)
         println(io, "IMPORTANT: This does NOT prove MCAR.")
         println(io, "Three possible explanations:")
@@ -468,7 +478,10 @@ function interpret_logistic_result(result::TestResult)::String
     sig_preds = get(result.details, "significant_predictors", [])
 
     if !isempty(sig_preds)
-        println(io, "SIGNIFICANT PREDICTORS (p < $(result.alpha)):")
+        println(io, "PREDICTORS ASSOCIATED WITH MISSINGNESS (p < $(result.alpha)):")
+        println(io, "Reported for interpretation and imputation model building.")
+        println(io, "These individual p-values are NOT corrected for multiple testing")
+        println(io, "and do not drive the decision above.")
         println(io, "─"^63)
 
         for pred in sig_preds
@@ -522,8 +535,8 @@ function interpret_logistic_result(result::TestResult)::String
             println(io)
         end
     else
-        println(io, "SIGNIFICANT PREDICTORS: None")
-        println(io, "No predictor variables significantly predict missingness.")
+        println(io, "PREDICTORS ASSOCIATED WITH MISSINGNESS: None")
+        println(io, "No individual predictor reached significance.")
         println(io)
     end
 
@@ -663,10 +676,7 @@ interpret_ci_or(1.02, 1.08)
 # "Effect is statistically significant (CI excludes 1.0). Relatively precise estimate."
 
 interpret_ci_or(0.5, 2.5)
-# "CI includes 1.0 — effect may not be significant. Wide interval suggests high uncertainty."
-
-interpret_ci_or(2.1, 5.3)
-# "Effect is statistically significant (CI excludes 1.0). Wide interval suggests some uncertainty."
+# "CI includes 1.0 — effect not statistically significant. Wide interval suggests high uncertainty."
 ```
 """
 function interpret_ci_or(ci_lower::Float64, ci_upper::Float64)::String
