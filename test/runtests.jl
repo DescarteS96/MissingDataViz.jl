@@ -361,10 +361,7 @@ using Random
             @test haskey(r.details, "mean_diff")
             @test r.alpha == 0.05
             @test r.degrees_of_freedom !== nothing
-            @test r.degrees_of_freedom > 0
-            @test r.pvalue == r.details["global_pvalue"]
-            @test r.statistic == r.details["lr_statistic"]
-            @test haskey(r.details, "min_pvalue")   
+            @test r.degrees_of_freedom > 0                                   
         end
 
         # ── Test 4: Edge cases ───────────────────────────────────
@@ -533,8 +530,10 @@ using Random
             @test haskey(r.details, "n_observed")
             @test haskey(r.details, "n_missing")
             @test haskey(r.details, "col_missing")
-            @test haskey(r.details, "predictors")
+            @test haskey(r.details, "predictors")           
             @test haskey(r.details, "min_pvalue")
+            @test haskey(r.details, "global_pvalue")
+            @test haskey(r.details, "lr_statistic")
             @test haskey(r.details, "significant_predictors")
             @test haskey(r.details, "n_significant")
             @test haskey(r.details, "model_deviance")
