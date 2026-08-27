@@ -112,15 +112,15 @@ via `GLM.jl` with automatic column name sanitization for non-standard identifier
 The classic multivariate MCAR test [@little1988test] based on the chi-square
 statistic comparing observed pattern means to the grand mean under the MCAR
 assumption. **Note:** Our simulation study reveals inflated Type I error rates
-at high missingness (38.6% at 30% missing, $\alpha=0.05$), consistent with
+at high missingness (32.0% at 30% missing, $\alpha=0.05$, $n=1000$), consistent with
 known limitations of the chi-square approximation when the number of distinct
 missing patterns is large relative to sample size.
 
 ### Multi-test consensus (`compare_mcar_tests`)
 
-All three tests are run and a weighted consensus decision is returned. The
-Welch t-test is given primary weight as the only test with consistently
-calibrated Type I error across all conditions tested.
+All three tests are run and a weighted consensus decision is returned. The 
+Welch t-test and logistic regression test are given primary weight as the
+two tests with nominally calibrated Type I error across all conditions tested.
 
 # Calibration Study
 
@@ -129,23 +129,29 @@ missing rates $\in \{10\%, 20\%, 30\%\}$, $\alpha \in \{0.01, 0.05, 0.10\}$,
 seeds fixed for reproducibility) evaluated Type I error and statistical power
 for all three tests.
 
-**Type I error** (target: $\leq \alpha$, MCAR data):
+**Type I error** (target: $\leq \alpha$, MCAR data, $\alpha = 0.05$, $n = 1000$):
 
 | Test | 10% missing | 20% missing | 30% missing |
 |------|:-----------:|:-----------:|:-----------:|
-| Welch t-test | **0.0%** | **0.0%** | **0.0%** |
-| Logistic regression | 19.1% | 20.0% | **0.0%** |
-| Little's test | 9.7% | 19.6% | 38.6% |
+| Welch t-test | **5.5%** | **4.3%** | **4.0%** |
+| Logistic regression | **5.6%** | **5.5%** | **4.1%** |
+| Little's test | 10.0% | 17.5% | 32.0% |
 
 Results at $\alpha = 0.05$, $n = 1000$. Little's test inflation persists at
-$n = 5000$, confirming the issue is structural rather than a sample size effect.
+$n = 5000$ (7.5%, 15.1%, 29.6% respectively), confirming the issue is
+structural. The Welch t-test and logistic regression maintain nominal Type I
+error rates across all 18 tested conditions ($n \in \{1000, 5000\}$,
+missing rate $\in \{10\%, 20\%, 30\%\}$, $\alpha \in \{0.01, 0.05, 0.10\}$).
 
-**Statistical power** (MAR data): All three tests achieve 100% power at
-missing rates $\geq 20\%$. The only exception is Little's test at 10% missing,
-$n=1000$ (power = 98.2%).
+**Statistical power** (MAR data, $\beta = 2.0$ logistic signal): All three
+tests achieve $\geq 99\%$ power at missing rates $\geq 20\%$. The only
+exception is Little's test at 10% missing, $n=1000$ (power = 98.2%).
+Note: the MAR generator uses a strong linear signal; power results should be
+interpreted as an upper bound under the conditions tested.
 
-The Welch t-test is the only test controlling both error types simultaneously
-across all conditions and is recommended as the primary diagnostic test.
+Little's test is the only test exhibiting systematic Type I error inflation
+and should be used as confirmation only. Welch t-test and logistic regression
+are both recommended as primary diagnostic tests.
 
 # Performance Benchmarks
 
