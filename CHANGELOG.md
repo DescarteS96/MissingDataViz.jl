@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Research & Documentation
 
+### Fixed
+
+- **Simulation generator asymmetry** (`generate_mcar_data`): The MCAR generator
+  put missing values in ALL columns, leaving no complete column for the Welch
+  t-test wrapper. The test returned INCONCLUSIVE every iteration, producing a
+  spurious 0.0% Type I error. Fixed by adding `n_complete_cols` kwarg (default=0
+  for backward compatibility); simulation script updated to use `n_complete_cols=1`
+  to match the geometry of `generate_mar_data`.
+
+- **Logistic regression decision criterion** (`test_mcar_logistic`): The MCAR
+  decision was based on `min(p-value)` across predictor coefficients without
+  multiple testing correction, inflating Type I error to `1-(1-α)^k`
+  (measured: 21.6% at 10% missing with k=4 predictors, α=0.05). Replaced by a
+  global likelihood ratio test (LRT) comparing the fitted model against the
+  intercept-only model: `LR ~ Chisq(k)`. Individual predictor p-values are
+  retained in `details` for imputation model building but no longer drive the
+  decision. Type I error after fix: nominally calibrated (5.6/5.5/4.1% at
+  α=0.05, n=1000).
+
 ### Added
 
 #### Type I / Type II Error Simulations
@@ -15,11 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sample sizes: n ∈ {1000, 5000}
   - Missing rates: 10%, 20%, 30%
   - Alpha levels: α ∈ {0.01, 0.05, 0.10}
-- Key findings:
-  - Welch t-test: Type I = 0.0% across all 18 conditions — perfectly calibrated
-  - Little's test: Type I inflation 2.5%–50.1%, increases monotonically with missingness rate, independent of sample size
-  - Logistic regression: Type I inflated at 10–20% missing, nominal at 30%
-  - All tests: Power = 100% except Little's at 10% missing / n=1000 (98.2%)
+- Key findings (corrected after bug fixes — see Fixed section below):
+  - Welch t-test: Type I nominally calibrated (5.5/4.3/4.0% at α=0.05, n=1000)
+  - Logistic regression: Type I nominally calibrated (5.6/5.5/4.1% at α=0.05, n=1000) after LRT fix
+  - Little's test: Type I inflation 10.0/17.5/32.0% at α=0.05, n=1000 — increases monotonically, persists at n=5000
+  - All tests: Power ≥ 98.2% across all conditions
 - Reports: `benchmarks/results/type1_type2_report.md` + `.docx`
 
 #### Cross-Language Performance Benchmarks
