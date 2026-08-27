@@ -99,7 +99,7 @@ plot_missing_diagnosis(df)    # 2×2 integrated dashboard
 MissingDataViz.jl implements three complementary MCAR tests:
 
 ### Welch t-test (`test_mcar_means`)
-Tests whether the mean of a complete variable differs between observations where another variable is missing vs. present. Perfectly calibrated Type I error (0.0%) across all conditions tested.
+Tests whether the mean of a complete variable differs between observations where another variable is missing vs. present. Nominally calibrated Type I error (1–7% across conditions tested, α=0.05). Decision based on a single pairwise comparison.
 
 ### Logistic regression (`test_mcar_logistic`)
 Models the probability of missingness as a function of observed variables. Handles both numeric and categorical predictors via GLM.jl.
@@ -114,16 +114,15 @@ Runs all three tests and returns a weighted consensus decision with automatic MC
 
 ## Calibration Results
 
-Simulation study (1000 iterations, n=1000, seeds fixed):
+Simulation study (1000 iterations, n ∈ {1000, 5000}, seeds fixed, α=0.05):
 
-| Test | Type I @ 10% missing | Type I @ 30% missing | Power (MAR) |
-|------|:--------------------:|:--------------------:|:-----------:|
-| Welch t-test | **0.0%** ✓ | **0.0%** ✓ | 100% |
-| Logistic regression | 19.1% ✗ | 0.0% ✓ | 100% |
-| Little's test | 9.7% ✗ | 38.6% ✗ | 100% |
+| Test | Type I @ 10% | Type I @ 20% | Type I @ 30% | Power (MAR) |
+|------|:------------:|:------------:|:------------:|:-----------:|
+| Welch t-test | **5.5%** ✓ | **4.3%** ✓ | **4.0%** ✓ | 100% |
+| Logistic regression | **5.6%** ✓ | **5.5%** ✓ | **4.1%** ✓ | ~100% |
+| Little's test | 10.0% ✗ | 17.5% ✗ | 32.0% ✗ | 98–100% |
 
-**Recommendation:** Use Welch t-test as primary test. Little's test and logistic regression as confirmation only.
-
+**Key finding:** Little's test exhibits systematic Type I error inflation increasing monotonically with missingness rate, persisting at n=5000. Welch t-test and logistic regression (global LRT) maintain nominal Type I error across all conditions tested.
 ---
 
 ## Validated Datasets
@@ -132,8 +131,8 @@ MissingDataViz.jl has been validated on 5 public datasets:
 
 | Dataset | Rows | Cols | Missing % |
 |---------|------|------|-----------|
-| Adult Census | 32,560 | 15 | 0.0% (post-clean) |
-| Diabetes 130-US | 101,766 | 50 | 7.4% |
+| Adult Census | 32,561 | 15 | 0.9% |
+| Diabetes 130-US | 101,766 | 50 | 28.4% |
 | Melbourne Housing | 13,580 | 21 | 4.6% |
 | NYC Airbnb | 48,895 | 16 | 2.6% |
 | Online Retail | 541,910 | 8 | 3.2% |
