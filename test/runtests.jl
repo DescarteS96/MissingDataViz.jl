@@ -362,6 +362,9 @@ using Random
             @test r.alpha == 0.05
             @test r.degrees_of_freedom !== nothing
             @test r.degrees_of_freedom > 0
+            @test r.pvalue == r.details["global_pvalue"]
+            @test r.statistic == r.details["lr_statistic"]
+            @test haskey(r.details, "min_pvalue")   
         end
 
         # ── Test 4: Edge cases ───────────────────────────────────
@@ -538,7 +541,8 @@ using Random
             @test haskey(r.details, "formula")
             
             @test r.alpha == 0.05
-            @test r.degrees_of_freedom === nothing  # Logistic has no single df
+            @test r.degrees_of_freedom isa Float64
+            @test r.degrees_of_freedom > 0
         end
 
         # ── Test 4: Edge cases ───────────────────────────────────
@@ -568,7 +572,7 @@ using Random
             )
             r_no_pred = test_mcar_logistic(df_no_pred, :a)
             @test r_no_pred.decision == INCONCLUSIVE
-            @test occursin("No fully observed", r_no_pred.warnings[1])
+            @test occursin("predictor columns available", r_no_pred.warnings[1])
 
             # Nonexistent column → ArgumentError
             @test_throws ArgumentError test_mcar_logistic(df_mar, :nonexistent)

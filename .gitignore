@@ -45,3 +45,6 @@ Manifest.toml
 executive_report_*.html
 workflow_*.png
 test_output_*.png
+*.docx
+paper_review.md
+Manifest.toml.backup*
