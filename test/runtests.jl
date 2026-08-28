@@ -326,7 +326,7 @@ using Random
         # ── Common fixtures ──────────────────────────────────────
         Random.seed!(42)
         df_mcar = generate_mcar_data(200, 4, 0.20; seed=42)
-        df_mar  = generate_mar_data(200, 4, 0.20; seed=42)
+        df_mar  = generate_mar_data(2000, 4, 0.20; seed=42)
         df_mnar = generate_mnar_data(200, 4, 0.20; seed=42)
 
         # Complete column for testing on df_mcar
@@ -348,7 +348,7 @@ using Random
             r = test_mcar_means(df_mar, :x2, :x1)
             @test r.decision == MCAR_REJECTED
             @test r.pvalue < 0.05
-            @test r.details["n_observed"] + r.details["n_missing"] == 200
+            @test r.details["n_observed"] + r.details["n_missing"] == 2000
         end
 
         # ── Test 3: TestResult structure ─────────────────────────
@@ -501,7 +501,7 @@ using Random
         # ── Common fixtures ──────────────────────────────────────
         Random.seed!(42)
         df_mcar = generate_mcar_data(200, 4, 0.20; seed=42)
-        df_mar  = generate_mar_data(200, 4, 0.20; seed=42)
+        df_mar  = generate_mar_data(2000, 4, 0.20; seed=42)
 
         # ── Test 1: Basic functionality ──────────────────────────
         @testset "Basic functionality" begin
@@ -519,7 +519,7 @@ using Random
             # x1 should predict x2 missingness in MAR data
             @test r.decision == MCAR_REJECTED
             @test r.pvalue < 0.05
-            @test r.details["n_observed"] + r.details["n_missing"] == 200
+            @test r.details["n_observed"] + r.details["n_missing"] == 2000
             @test !isempty(r.details["predictors"])
         end
 

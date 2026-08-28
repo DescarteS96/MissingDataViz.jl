@@ -297,7 +297,11 @@ function test_mcar_logistic(
     n_events_retained    = sum(df_model.y .== 1)
     n_nonevents_retained = sum(df_model.y .== 0)
 
-    if n_events_retained < 10 || n_nonevents_retained < 10
+    # Only bail out when a binary model is literally unfittable. A merely
+    # small number of retained events is handled at decision time by the
+    # events-per-variable check, which preserves the accumulated warnings
+    # and details.
+    if n_events_retained < 2 || n_nonevents_retained < 2
         overlapping = [c for c in predictors
                        if sum(ismissing.(df[!, c]) .& (y .== 1)) > 0.5 * n_missing]
         return TestResult(
@@ -318,6 +322,14 @@ function test_mcar_logistic(
             ["Outcome has too little variation after complete-case filtering — " *
              "missingness in this column largely co-occurs with missingness in its predictors"]
         )
+    end
+
+        if n_events_retained < 10 || n_nonevents_retained < 10
+        push!(warnings,
+            "Only $(n_events_retained) missing / $(n_nonevents_retained) observed " *
+            "cases remain after complete-case filtering (from $(n_missing) / " *
+            "$(n_observed)). Missingness in this column may overlap with " *
+            "missingness in its predictors.")
     end
 
     formula_str = "y ~ " * join(string.(predictors), " + ")
