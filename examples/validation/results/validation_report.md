@@ -1,223 +1,94 @@
-# MissingDataViz.jl — Validation Report (Step 13, Part 1)
+# Sections à remplacer dans `examples/validation/results/validation_report.md`
 
-Generated: 2026-08-27 (updated with corrected LRT-based logistic regression)
+Les chiffres proviennent de l'exécution du 27 août 2026, après les correctifs
+apportés à `test_mcar_logistic` (commits a08fa9c, 1430403, ccc27e6).
 
-> **Note:** Results updated after two bug fixes:
-> (1) `generate_mcar_data` now keeps x1 complete for valid Welch simulation;
-> (2) `test_mcar_logistic` now uses a global likelihood ratio test instead of
-> `min(p-value)`, eliminating Type I error inflation of `1-(1-α)^k`.
-
-## 1. Dataset Summary
-
-| Dataset | Domain | Rows | Cols | Missing % | Cols w/ Missing | Patterns | Time (s) |
-|---------|--------|------|------|-----------|-----------------|----------|----------|
-| Adult/Census Income | Marketing/Demographics | 32,561 | 15 | 0.87% | 3 | 5 | 56.77 |
-| Diabetes 130-US Hospitals | Medical | 101,766 | 50 | 3.79% | 7 | 54 | 12.80 |
-| Online Retail II | Finance/Commerce | 100,000 | 8 | 4.40% | 2 | 3 | 21.99 |
-| NYC Airbnb | Marketing/Real Estate | 48,895 | 16 | 2.57% | 4 | 6 | 4.92 |
-| Melbourne Housing | Finance/Real Estate | 13,580 | 21 | 4.65% | 4 | 12 | 18.65 |
-
-## 2. MCAR Test Results
-
-| Dataset | Little's p-value | Little's Decision | Logistic violations | Logistic INCONCLUSIVE | Welch violations | Violated Columns (Welch) |
-|---------|------------------|-------------------|--------------------:|----------------------:|-----------------:|--------------------------|
-| Adult/Census Income | NaN | INCONCLUSIVE | 1 | 0 | 2 | workclass, occupation |
-| Diabetes 130-US Hospitals | NaN | INCONCLUSIVE | 0 | 7 | 6 | diag_3, weight, race, medical_specialty, diag_2, payer_code |
-| Online Retail II | 0.0 | MCAR_REJECTED | 0 | 2 | 1 | Customer_ID |
-| NYC Airbnb | 0.0 | MCAR_REJECTED | 0 | 4 | 4 | last_review, host_name, reviews_per_month, name |
-| Melbourne Housing | 0.0 | MCAR_REJECTED | 0 | 4 | 3 | CouncilArea, Car, BuildingArea |
-
-**Note on Logistic INCONCLUSIVE:** These occur when a column has insufficient
-observed predictor columns meeting the ≥80% observation threshold, or when
-the fitted model encounters perfect separation. This is correct behavior —
-the guard-foul returns INCONCLUSIVE rather than a spurious rejection.
-
-**All 5 datasets correctly reject MCAR**, consistent with the literature:
-real-world observational data are rarely missing completely at random
-(Schafer & Graham, 2002).
-
-## 3. Per-Dataset Details
-
-### Adult/Census Income (Marketing/Demographics)
-
-**Size**: 32,561 rows × 15 columns
-
-**Missing columns** (sorted by % missing):
-
-| Column | Missing % |
-|--------|-----------|
-| occupation | 5.66% |
-| workclass | 5.64% |
-| native_country | 1.79% |
-
-**MCAR diagnosis**: INCONCLUSIVE (Little's test requires numeric columns with missing values; missing here is only in categorical columns)
-
-**Logistic violations**: native_country (1)
-
-**Welch violations**: workclass, occupation (2)
-
-**Consensus verdict**: MCAR VIOLATED — weak or localized MAR
-
-**Notes**: Leading spaces in values — CSV.jl strips them if missingstring includes ' ?'
+Seule la colonne logistique change. Little et Welch ne sont pas affectés par
+ces correctifs — leurs résultats restent ceux du rapport précédent.
 
 ---
 
-### Diabetes 130-US Hospitals (Medical)
+## Remplacer le tableau « MCAR Test Results »
 
-**Size**: 101,766 rows × 50 columns
+| Dataset | Little's p | Little | Logistic rejected | Logistic inconclusive | t-test violations | Verdict |
+|---|---|---|---|---|---|---|
+| Adult / Census Income | NaN | INCONCLUSIVE | 0 | 3 | 2 | MCAR VIOLATED |
+| Diabetes 130-US Hospitals | NaN | INCONCLUSIVE | 2 | 5 | 6 | MCAR VIOLATED |
+| Online Retail II | 0.0 | REJECTED | 0 | 1 | 1 | MCAR VIOLATED |
+| NYC Airbnb | 0.0 | REJECTED | 2 | 2 | 4 | MCAR VIOLATED |
+| Melbourne Housing | 0.0 | REJECTED | 3 | 1 | 3 | MCAR VIOLATED |
 
-**Missing columns** (sorted by % missing):
+Across the five datasets, the logistic path returns a decision for 8 of the 20
+columns containing missing values: 7 rejections and 1 non-rejection. The
+remaining 12 are reported as inconclusive, with the reason recorded in each
+result's `details["reason"]` field and in its warnings.
 
-| Column | Missing % |
-|--------|-----------|
-| weight | 96.86% |
-| medical_specialty | 49.08% |
-| payer_code | 39.56% |
-| race | 2.23% |
-| diag_3 | 1.40% |
-| diag_2 | 0.35% |
-| diag_1 | 0.02% |
-
-**MCAR diagnosis**: INCONCLUSIVE (Little's test requires numeric columns with missing values)
-
-**Logistic violations**: 0 (7 INCONCLUSIVE — columns with insufficient observed predictors after ≥80% threshold)
-
-**Welch violations**: diag_3, weight, race, medical_specialty, diag_2, payer_code (6)
-
-**Consensus verdict**: MCAR VIOLATED — weak or localized MAR
-
-**Interpretation**: Missing laboratory values (weight, medical_specialty) are predicted by diagnosis codes — consistent with clinical protocol where certain tests are ordered only for specific diagnoses.
-
-**Notes**: Many '?' encoded missing values. weight column is ~97% missing.
+All five datasets are found to violate MCAR. The verdict rests on the pairwise
+Welch *t*-tests in every case, and is corroborated by Little's test on three of
+the five.
 
 ---
 
-### Online Retail II (Finance/Commerce)
+## Remplacer la note « Logistic INCONCLUSIVE »
 
-**Size**: 100,000 rows × 8 columns (limited from 541,910)
+**Note on inconclusive logistic results.** The logistic regression test declines
+to return a decision when the fitted model cannot support one. Four distinct
+conditions trigger this, all of which occur in the validation datasets:
 
-**Missing columns** (sorted by % missing):
+**Missingness overlapping a predictor.** In the Adult dataset, `workclass` is
+missing on exactly the same 1,836 rows as `occupation`. Complete-case filtering
+on `occupation` therefore removes every row in which `workclass` is missing,
+leaving no events to model. Both columns are reported as inconclusive, and the
+warning names the overlapping predictor. Passing `exclude_cols=[:occupation]`
+allows the test to proceed.
 
-| Column | Missing % |
-|--------|-----------|
-| Customer_ID | 34.92% |
-| Description | 0.30% |
+**Insufficient events per variable.** Following the conventional threshold of 10
+events per estimated coefficient (Peduzzi et al., 1996), models below this ratio
+return `INCONCLUSIVE` rather than an unreliable p-value. In NYC Airbnb, `name`
+has 16 missing values against 15 estimated coefficients (EPV = 1.1); the
+underlying p-value of 3.9 × 10⁻⁵ would otherwise have been reported as a
+rejection. The threshold is configurable through `min_epv`.
 
-**MCAR diagnosis**: MCAR_REJECTED (p = 0.0)
+**Non-convergence.** Five columns in the Diabetes dataset produce a model
+deviance exceeding the null deviance, which is only possible when the fit has
+not converged. Both deviances are reported in the warning.
 
-**Logistic violations**: 0 (2 INCONCLUSIVE)
+**Complete separation.** In Online Retail II, `Customer_ID` missingness is
+perfectly predicted by a single covariate, driving the deviance to infinity.
 
-**Welch violations**: Customer_ID (1)
+High-cardinality categorical predictors are excluded before fitting, with a
+warning. The default threshold is 20 levels, configurable through `max_levels`.
+Without it, the ICD-9 diagnosis columns in the Diabetes dataset (roughly 700
+levels each) inflated the degrees of freedom to 2,321 for 3,197 events, and the
+`name` column in NYC Airbnb (47,905 levels for 48,895 rows) exhausted memory
+during model construction.
 
-**Consensus verdict**: CLEAR — MCAR VIOLATED
-
-**Notes**: Tab-separated file. Price uses European decimal comma. Limited to 100k rows.
-
----
-
-### NYC Airbnb (Marketing/Real Estate)
-
-**Size**: 48,895 rows × 16 columns
-
-**Missing columns** (sorted by % missing):
-
-| Column | Missing % |
-|--------|-----------|
-| last_review | 20.56% |
-| reviews_per_month | 20.56% |
-| host_name | 0.04% |
-| name | 0.03% |
-
-**MCAR diagnosis**: MCAR_REJECTED (p = 0.0)
-
-**Logistic violations**: 0 (4 INCONCLUSIVE)
-
-**Welch violations**: last_review, host_name, reviews_per_month, name (4)
-
-**Consensus verdict**: CLEAR — MCAR VIOLATED
-
-**Interpretation**: last_review and reviews_per_month are simultaneously missing for listings with no reviews — a structural missingness pattern correctly detected.
-
-**Notes**: reviews_per_month missing = listing has 0 reviews (structural missing).
+Where the logistic path is inconclusive, the Welch *t*-test and Little's test
+remain available and were sufficient to establish the verdict on all five
+datasets.
 
 ---
 
-### Melbourne Housing (Finance/Real Estate)
+## Ajouter, en fin de rapport
 
-**Size**: 13,580 rows × 21 columns
+## Reproducibility
 
-**Missing columns** (sorted by % missing):
+The five datasets are not redistributed with the package. Three are available
+from the UCI Machine Learning Repository (Adult, Diabetes 130-US Hospitals,
+Online Retail II) and two from Kaggle (NYC Airbnb Open Data, Melbourne Housing
+Snapshot). The latter two require authentication, so a fully automated download
+script is not currently provided.
 
-| Column | Missing % |
-|--------|-----------|
-| BuildingArea | 47.50% |
-| YearBuilt | 39.58% |
-| CouncilArea | 10.08% |
-| Car | 0.46% |
+SHA-256 checksums of the files used for this report:
 
-**MCAR diagnosis**: MCAR_REJECTED (p = 0.0)
-
-**Logistic violations**: 0 (4 INCONCLUSIVE)
-
-**Welch violations**: CouncilArea, Car, BuildingArea (3)
-
-**Consensus verdict**: CLEAR — MCAR VIOLATED
-
-**Notes**: Multiple columns with varying missing rates. Good test for pattern diversity.
-
----
-
-## 4. Comparison with R/Python (Manual)
-
-Fill in after running equivalent analyses in R (naniar) and Python (missingno).
-
-| Dataset | Metric | MissingDataViz.jl | R (naniar) | Python (missingno) | Divergence? |
-|---------|--------|-------------------|------------|--------------------| ------------|
-| Adult/Census Income | Missing % | 0.87% | — | — | — |
-| Adult/Census Income | Little's p | NaN | — | — | — |
-| Diabetes 130-US Hospitals | Missing % | 3.79% | — | — | — |
-| Diabetes 130-US Hospitals | Little's p | NaN | — | — | — |
-| Online Retail II | Missing % | 4.40% | — | — | — |
-| Online Retail II | Little's p | 0.0 | — | — | — |
-| NYC Airbnb | Missing % | 2.57% | — | — | — |
-| NYC Airbnb | Little's p | 0.0 | — | — | — |
-| Melbourne Housing | Missing % | 4.65% | — | — | — |
-| Melbourne Housing | Little's p | 0.0 | — | — | — |
-
-### How to Compare
-
-**R (naniar + mice)**:
-```r
-library(naniar)
-library(mice)
-df <- read.csv("data/adult.csv", header=FALSE, na.strings=c("?", " ?"))
-miss_var_summary(df)
-mcar_test(df)
+```
+70acda78373ddd1c2615a7ae2afbc10c91e85edbdc7706a42c6b3818e2820e1e  adult.csv
+0689e7ec031237dc63031b938805c48377748761a3b26acab621567afa24df97  diabetic_data.csv
+3e449c3e95088da8a3a6b10331a5703f2c951d0740f317f97ed9baf0db1fd9f8  melbourne_housing.csv
+e420db40ff10fcb40efc1b5b1648ee0b18a48f4e4537155cecc59fe95d18783a  nyc_airbnb.csv
+e37a7952fcab727a345d7f7a9e7723c099779fbe835580ede0788a679a71057a  online_retail.csv
 ```
 
-**Python (missingno + scipy)**:
-```python
-import pandas as pd
-import missingno as msno
-df = pd.read_csv('data/adult.csv', header=None, na_values=['?', ' ?'])
-df.isnull().sum() / len(df) * 100
-msno.matrix(df)
-msno.heatmap(df)
-```
-
-## 5. Expected Divergence Sources
-
-1. **Little's test p-values**: Small numerical differences due to different
-   chi-squared implementations and EM convergence criteria. Differences <0.01
-   in p-value are normal. Decisions (reject/accept) should agree.
-
-2. **Logistic regression**: GLM.jl vs R glm() vs Python statsmodels may use
-   different optimization algorithms. p-values should be close but not identical.
-   The global LRT decision criterion is now consistent with standard implementations.
-
-3. **Missing percentages**: Should be IDENTICAL. Any divergence means different
-   missing value encoding (e.g., '?' not recognized as missing).
-
-4. **Welch t-test results**: Should match closely. R uses `t.test()`,
-   Python uses `scipy.stats.ttest_ind(equal_var=False)`. Minor p-value
-   differences from degrees of freedom rounding are expected.
+Online Retail II was truncated to its first 100,000 rows for this validation;
+the full 541,910-row file was used for the cross-language performance
+benchmarks.

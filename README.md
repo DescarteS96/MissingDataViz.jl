@@ -132,7 +132,7 @@ MissingDataViz.jl has been validated on 5 public datasets:
 | Dataset | Rows | Cols | Missing % |
 |---------|------|------|-----------|
 | Adult Census | 32,561 | 15 | 0.9% |
-| Diabetes 130-US | 101,766 | 50 | 28.4% |
+| Diabetes 130-US | 101,766 | 50 | 3.8% |
 | Melbourne Housing | 13,580 | 21 | 4.6% |
 | NYC Airbnb | 48,895 | 16 | 2.6% |
 | Online Retail | 541,910 | 8 | 3.2% |

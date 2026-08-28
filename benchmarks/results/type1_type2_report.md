@@ -91,7 +91,46 @@ listed as future work.
 
 ---
 
-## 4. Interpretation
+## 4. Sensitivity to the significance threshold
+
+Because all conditions were run at α ∈ {0.01, 0.05, 0.10}, the stability of each
+test's conclusions across thresholds can be read directly from the tables above.
+The ratio of observed rejection rate to nominal α is reported below for n = 1,000.
+
+| Test | Missing | α = 0.01 | α = 0.05 | α = 0.10 |
+|---|---|---|---|---|
+| Welch *t*-test | 10% | 1.1× | 1.1× | 1.0× |
+| Welch *t*-test | 20% | 0.9× | 0.9× | 1.1× |
+| Welch *t*-test | 30% | 0.8× | 0.8× | 0.8× |
+| Logistic regression | 10% | 1.3× | 1.1× | 1.2× |
+| Logistic regression | 20% | 1.3× | 1.1× | 1.1× |
+| Logistic regression | 30% | 0.8× | 0.8× | 0.8× |
+| Little's test | 10% | 2.9× | 2.0× | 1.7× |
+| Little's test | 20% | 6.2× | 3.5× | 2.6× |
+| Little's test | 30% | **15.2×** | **6.4×** | **4.2×** |
+
+**Welch and logistic regression are stable across thresholds.** Every ratio lies
+between 0.8 and 1.3, with no systematic drift as α changes. Conclusions drawn at
+one threshold hold at the others. The same pattern is observed at n = 5,000
+(ratios between 0.9 and 1.7).
+
+**Little's test is not, and the instability has a direction.** The inflation
+ratio grows as α shrinks: at 30% missingness it is 4.2× at α = 0.10 but 15.2× at
+α = 0.01. The excess is therefore concentrated in the tail of the null
+distribution — precisely the region a practitioner relies on when reporting
+p < 0.01 as strong evidence against MCAR.
+
+This has a practical consequence that the raw rates understate. Reading
+"p < 0.01, strong evidence" from Little's test on a dataset with 30% missing
+values corresponds, in these simulations, to a false positive roughly fifteen
+times more often than the threshold implies. Relaxing the threshold does not
+help in absolute terms — the rejection rate is still 42.3% at α = 0.10 — but the
+discrepancy between nominal and actual is widest where confidence is usually
+highest.
+
+---
+
+## 5. Interpretation
 
 **Welch *t*-test and logistic regression are nominally calibrated.** All 18
 conditions for each test fall inside the Monte Carlo acceptance interval, and
