@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Research & Documentation
+## [0.2.1] - 2026-08-27
 
 ### Fixed
 
@@ -26,7 +26,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decision. Type I error after fix: nominally calibrated (5.6/5.5/4.1% at
   α=0.05, n=1000).
 
+- **Four silent failure modes in `test_mcar_logistic`**, found while validating
+  on real datasets:
+  - Constant columns produced a one-level factor; GLM raised "only one level
+    found" and the test failed for every column of the dataset.
+  - Predictors becoming single-valued only after complete-case filtering caused
+    the same failure. Constancy is now re-checked on the retained rows, and the
+    formula is built afterwards.
+  - High-cardinality categorical predictors (ICD-9 diagnosis codes, ~700 levels;
+    Airbnb listing names, 47,905 levels) produced design matrices of thousands
+    of columns: `OutOfMemoryError` on three of the five validation datasets, and
+    no power on Diabetes (df = 2321 for 3197 events, so `medical_specialty`
+    returned p = 1.000 instead of p < 1e-300).
+  - A negative deviance difference from a non-converged fit was clamped to zero
+    by `max(., 0.0)`, yielding p = 1.0 and a spurious "MCAR not rejected". Now
+    reported as `INCONCLUSIVE`, with both deviances in the warning.
+
+- **Overlapping missingness** now detected: when complete-case filtering leaves
+  no events to model, the result is `INCONCLUSIVE` and the warning names the
+  overlapping predictor. In the Adult dataset, `workclass` is missing on exactly
+  the same 1,836 rows as `occupation`.
+
+- **`max_levels` and `min_epv` were unreachable** from `compare_mcar_tests` and
+  `full_missing_diagnosis`, which is how most users call the test. Now forwarded.
+
 ### Added
+
+#### Reliability guards in `test_mcar_logistic`
+- `max_levels` kwarg (default 20): categorical predictors with more levels are
+  excluded before fitting, with a warning.
+- `min_epv` kwarg (default 10.0, per Peduzzi et al., 1996): models with fewer
+  than 10 events per estimated coefficient return `INCONCLUSIVE` rather than an
+  unreliable p-value.
+- New `details` fields: `events`, `epv`, `n_model_rows`,
+  `constant_cols_excluded`, `high_cardinality_excluded`.
+- Validation outcome across the five public datasets: 7 rejections, 1
+  non-rejection, 12 inconclusive over the 20 columns containing missing values.
+  Verdicts unchanged — all five violate MCAR.
 
 #### Type I / Type II Error Simulations
 - Simulation script `benchmarks/simulations_type1_type2.jl`
@@ -34,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sample sizes: n ∈ {1000, 5000}
   - Missing rates: 10%, 20%, 30%
   - Alpha levels: α ∈ {0.01, 0.05, 0.10}
-- Key findings (corrected after bug fixes — see Fixed section below):
+- Key findings (corrected after bug fixes — see Fixed section above):
   - Welch t-test: Type I nominally calibrated (5.5/4.3/4.0% at α=0.05, n=1000)
   - Logistic regression: Type I nominally calibrated (5.6/5.5/4.1% at α=0.05, n=1000) after LRT fix
   - Little's test: Type I inflation 10.0/17.5/32.0% at α=0.05, n=1000 — increases monotonically, persists at n=5000
@@ -195,6 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependencies**: DataFrames.jl, Makie.jl, CairoMakie.jl
 - **Julia Compatibility**: 1.9+
 
-[Unreleased]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/DescarteS96/MissingDataViz.jl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/DescarteS96/MissingDataViz.jl/releases/tag/v0.1.0
