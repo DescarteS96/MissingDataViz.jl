@@ -78,7 +78,9 @@ The function identifies three scenarios:
 function compare_mcar_tests(
     df::DataFrame;
     alpha::Float64 = 0.05,
-    verbose::Bool = true
+    verbose::Bool = true,
+    max_levels::Int = 20,
+    min_epv::Float64 = 10.0
 )::MCARTestComparison
     
     # ── 0. SANITIZE COLUMN NAMES ─────────────────────────────────
@@ -163,7 +165,9 @@ function compare_mcar_tests(
         
         # Logistic regression
         try
-            logistic_results[col] = test_mcar_logistic(df, col, alpha=alpha)
+            logistic_results[col] = test_mcar_logistic(df, col; alpha=alpha,
+                                                       max_levels=max_levels,
+                                                       min_epv=min_epv)
         catch e
             @warn "Logistic test for $col failed: $e"
         end
@@ -266,7 +270,7 @@ function _generate_comparison_summary(
 
         if !isempty(logistic_inconclusive)
             println(io_summary)
-            println(io_summary, "   ⚠️  INCONCLUSIVE (insufficient predictors):")
+            println(io_summary, "   ⚠️  INCONCLUSIVE (see per-column warnings):")
             for col in logistic_inconclusive[1:min(3, length(logistic_inconclusive))]
                 println(io_summary, "      • $col")
             end
