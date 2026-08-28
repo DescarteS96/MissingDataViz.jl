@@ -6,6 +6,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://DescarteS96.github.io/MissingDataViz.jl/dev/)
 [![Build Status](https://github.com/DescarteS96/MissingDataViz.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/DescarteS96/MissingDataViz.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/DescarteS96/MissingDataViz.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/DescarteS96/MissingDataViz.jl)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22145046.svg)](https://doi.org/10.5281/zenodo.22145046)
 
 ---
 
@@ -230,13 +231,14 @@ Department of Statistics
 If you use MissingDataViz.jl in your research, please cite:
 
 ```bibtex
-@article{ballamou2026missingdataviz,
-  author  = {Ballamou, Rene Fassou and Yenilmez, Ismail},
-  title   = {MissingDataViz.jl: A Diagnostic-First Framework for Missing Data Analysis in Julia},
-  journal = {Journal of Open Source Software},
-  year    = {2026},
-  url     = {https://github.com/DescarteS96/MissingDataViz.jl},
-  affiliation = {Eskişehir Technical University, Department of Statistics}
+@software{ballamou2026missingdataviz,
+  author    = {Ballamou, Rene Fassou and Yenilmez, İsmail},
+  title     = {MissingDataViz.jl: A Diagnostic-First Framework for Missing Data Analysis in Julia},
+  year      = {2026},
+  version   = {0.2.1},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.22145046},
+  url       = {https://doi.org/10.5281/zenodo.22145046}
 }
 ```
 

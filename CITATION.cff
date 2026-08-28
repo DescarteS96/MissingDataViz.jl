@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "MissingDataViz.jl: A Diagnostic-First Framework for Missing Data Analysis in Julia"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - given-names: Rene Fassou
+    family-names: Ballamou
+    email: renefassouballamou96@gmail.com
+    affiliation: "Eskişehir Technical University, Department of Statistics"
+    orcid: "https://orcid.org/0009-0006-9251-4982"
+  - given-names: İsmail
+    family-names: Yenilmez
+    email: ismailyenilmez@eskisehir.edu.tr
+    affiliation: "Eskişehir Technical University, Department of Statistics"
+    orcid: "https://orcid.org/0000-0002-3357-3898"
+repository-code: "https://github.com/DescarteS96/MissingDataViz.jl"
+url: "https://descartes96.github.io/MissingDataViz.jl/"
+license: MIT
+version: 0.2.1
+doi: 10.5281/zenodo.22145046
+date-released: "2026-08-27"
+keywords:
+  - julia
+  - missing data
+  - MCAR
+  - statistical testing
+  - data quality
+  - exploratory data analysis
