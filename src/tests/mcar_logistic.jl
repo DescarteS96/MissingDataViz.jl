@@ -99,7 +99,9 @@ function test_mcar_logistic(
     df::DataFrame,
     col_missing::Symbol;
     alpha::Float64 = 0.05,
-    exclude_cols::Vector{Symbol} = Symbol[]
+    exclude_cols::Vector{Symbol} = Symbol[],
+    max_levels::Int = 20,
+    min_epv::Float64 = 10.0
 )::TestResult
 
     # ── 1. INPUT VALIDATION ──────────────────────────────────────
@@ -175,9 +177,41 @@ function test_mcar_logistic(
     # of complete cases retained.
     MIN_OBS_RATIO = 0.80
 
+        constant_cols = Symbol[]
+    high_card     = Symbol[]
+
     predictors = filter(predictor_candidates) do col
-        n_obs = count(!ismissing, df[!, col])
-        n_obs / nrow(df) >= MIN_OBS_RATIO
+        v = df[!, col]
+        count(!ismissing, v) / nrow(df) >= MIN_OBS_RATIO || return false
+        u = unique(skipmissing(v))
+        # Zero-variance predictors produce a one-level factor, which GLM
+        # cannot contrast ("only one level found"). A constant column
+        # carries no information about missingness anyway.
+        if length(u) < 2
+            push!(constant_cols, col)
+            return false
+        end
+        # Categorical predictors with many levels generate one dummy column per
+        # level, inflating the degrees of freedom of the LR test until it has
+        # no power. ICD-9 diagnosis codes are a typical case (~700 levels).
+        if !(nonmissingtype(eltype(v)) <: Number) && length(u) > max_levels
+            push!(high_card, col)
+            return false
+        end
+        return true
+    end
+
+    if !isempty(constant_cols)
+        push!(warnings,
+            "$(length(constant_cols)) constant column(s) excluded from predictors: " *
+            join(string.(constant_cols), ", "))
+    end
+
+    if !isempty(high_card)
+        push!(warnings,
+            "$(length(high_card)) high-cardinality categorical predictor(s) excluded " *
+            "(> $(max_levels) levels): " * join(string.(high_card), ", ") *
+            ". Raise `max_levels` to include them, at the cost of test power.")
     end
 
     if isempty(predictors)
@@ -194,22 +228,17 @@ function test_mcar_logistic(
         )
     end
 
-    # ── 5. BUILD FORMULA AND FIT MODEL ───────────────────────────
-    # Create formula: y ~ x1 + x2 + x3 + ...
-    formula_str = "y ~ " * join(string.(predictors), " + ")
-    formula_obj = eval(Meta.parse("@formula($formula_str)"))
+    # ── 5. BUILD MODEL FRAME (rows first, then formula) ──────────
+    # Complete-case analysis must happen BEFORE the formula is built:
+    # a predictor that is non-constant on the full data can become
+    # single-valued once incomplete rows are dropped, which makes GLM
+    # fail with "only one level found".
+    df_model   = df[:, predictors]
+    df_model.y = y
 
-    # Prepare DataFrame for GLM (include y and predictors only)
-    df_model     = df[:, predictors]
-    df_model.y   = y
-
-    # Drop rows where ANY predictor is still missing (complete case analysis).
-    # This handles the ≥80% threshold: predictors may still have some missing
-    # rows that must be excluded before fitting the logistic model.
     complete_rows = completecases(df_model)
     df_model      = df_model[complete_rows, :]
 
-    # Guard: ensure sufficient complete cases remain after dropping
     if nrow(df_model) < 10
         return TestResult(
             "MCAR Logistic Regression Test",
@@ -225,12 +254,74 @@ function test_mcar_logistic(
         )
     end
 
-    # Warn if a significant number of rows were dropped
     n_dropped = sum(.!complete_rows)
     if n_dropped > 0
         push!(warnings,
             "$(n_dropped) rows dropped due to missing predictor values (complete case analysis).")
     end
+
+    # Re-check constancy on the retained rows
+    degenerate = Symbol[]
+    for col in predictors
+        length(unique(df_model[!, col])) < 2 && push!(degenerate, col)
+    end
+
+    if !isempty(degenerate)
+        push!(warnings,
+            "$(length(degenerate)) predictor(s) became single-valued after " *
+            "complete-case filtering and were excluded: " *
+            join(string.(degenerate), ", "))
+        predictors = filter(c -> c ∉ degenerate, predictors)
+        select!(df_model, [predictors; :y])
+    end
+
+    if isempty(predictors)
+        return TestResult(
+            "MCAR Logistic Regression Test",
+            NaN, NaN, alpha,
+            INCONCLUSIVE, nothing,
+            Dict{String,Any}(
+                "n_observed"   => n_observed,
+                "n_missing"    => n_missing,
+                "n_model_rows" => nrow(df_model),
+                "reason"       => "All candidate predictors were constant on the retained rows"
+            ),
+            ["No usable predictor remains after complete-case filtering"]
+        )
+    end
+
+    # Events must be counted on the retained rows, not on the full data.
+    # A predictor whose missingness overlaps that of the target column will,
+    # after complete-case filtering, remove nearly every row where the target
+    # is missing — leaving an outcome with almost no variation.
+    n_events_retained    = sum(df_model.y .== 1)
+    n_nonevents_retained = sum(df_model.y .== 0)
+
+    if n_events_retained < 10 || n_nonevents_retained < 10
+        overlapping = [c for c in predictors
+                       if sum(ismissing.(df[!, c]) .& (y .== 1)) > 0.5 * n_missing]
+        return TestResult(
+            "MCAR Logistic Regression Test",
+            NaN, NaN, alpha,
+            INCONCLUSIVE, nothing,
+            Dict{String,Any}(
+                "n_observed"   => n_observed,
+                "n_missing"    => n_missing,
+                "n_model_rows" => nrow(df_model),
+                "reason"       => "Only $(n_events_retained) missing / " *
+                                  "$(n_nonevents_retained) observed cases remain after " *
+                                  "complete-case filtering" *
+                                  (isempty(overlapping) ? "" :
+                                   "; missingness overlaps with predictor(s): " *
+                                   join(string.(overlapping), ", "))
+            ),
+            ["Outcome has too little variation after complete-case filtering — " *
+             "missingness in this column largely co-occurs with missingness in its predictors"]
+        )
+    end
+
+    formula_str = "y ~ " * join(string.(predictors), " + ")
+    formula_obj = eval(Meta.parse("@formula($formula_str)"))
 
     # Convert String and non-numeric non-Float columns to CategoricalArray for GLM dummy coding
     for col in names(df_model)
@@ -258,7 +349,7 @@ function test_mcar_logistic(
                 "n_missing"  => n_missing,
                 "predictors" => string.(predictors),
                 "formula"    => formula_str,
-                "reason"     => "Model fitting failed: $(typeof(e))"
+                "reason"     => "Model fitting failed: " * first(sprint(showerror, e), 300)
             ),
             ["Model fitting failed — possible perfect separation or collinearity"]
         )
@@ -315,15 +406,22 @@ function test_mcar_logistic(
     end
 
     # ── 7. GLOBAL LIKELIHOOD RATIO TEST ──────────────────────────
-    # H0: all predictor coefficients are zero (missingness is unpredictable).
-    # LR = deviance(null) - deviance(full) ~ Chisq(k) under H0,
-    # where k is the number of estimated predictor coefficients.
-    #
-    # The decision must NOT be based on min(p-values) across predictors:
-    # with k predictors that inflates Type I error to 1 - (1-alpha)^k
-    # (e.g. 18.5% at alpha=0.05, k=4).
     deviance_stat = deviance(model)
     df_lr = length(predictor_indices)
+
+    # Warn when the model is over-parameterised relative to the number of
+    # events. High-cardinality categorical predictors (e.g. diagnosis codes)
+    # can produce thousands of dummy columns, inflating df and leaving the
+    # test with almost no power.
+    events = min(n_events_retained, n_nonevents_retained)
+    if df_lr > 0 && df_lr > events / 10
+        push!(warnings,
+            "Model estimates $(df_lr) coefficients for $(events) events " *
+            "(events per variable = $(round(events / df_lr, digits=1))). " *
+            "High-cardinality categorical predictors inflate the degrees of freedom " *
+            "and sharply reduce the power of the likelihood ratio test. " *
+            "Consider excluding them via `exclude_cols`.")
+    end
 
     lr_stat, global_pvalue = if df_lr == 0
         push!(warnings, "No predictor coefficients estimated — global test undefined.")
@@ -331,8 +429,20 @@ function test_mcar_logistic(
     else
         try
             d0 = nulldeviance(model)
-            s  = max(d0 - deviance_stat, 0.0)
-            (s, ccdf(Chisq(df_lr), s))
+            s  = d0 - deviance_stat
+            if s < -1e-6
+                # Model deviance exceeds null deviance: the fit did not converge.
+                # Clamping to zero would silently yield p = 1 and a spurious
+                # "MCAR not rejected" decision.
+                push!(warnings,
+                    "Model deviance ($(round(deviance_stat, digits=2))) exceeds null " *
+                    "deviance ($(round(d0, digits=2))): the fit did not converge. " *
+                    "Result reported as inconclusive.")
+                (NaN, NaN)
+            else
+                s = max(s, 0.0)
+                (s, ccdf(Chisq(df_lr), s))
+            end
         catch
             push!(warnings,
                 "Null deviance unavailable; falling back to minimum predictor p-value. " *
@@ -340,9 +450,21 @@ function test_mcar_logistic(
             (NaN, min_pvalue)
         end
     end
-
+ 
     # ── 8. DECISION ──────────────────────────────────────────────
-    decision = if isnan(global_pvalue)
+        decision = if isnan(global_pvalue)
+        INCONCLUSIVE
+    elseif df_lr > 0 && events / df_lr < min_epv
+        # Fewer events than estimated coefficients: the model is saturated and
+        # the chi-squared approximation of the LR statistic does not hold.
+        # Returning a p-value here would produce fabricated rejections.
+        push!(warnings,
+            "Only $(events) events for $(df_lr) estimated coefficients " *
+            "(EPV = $(round(events / df_lr, digits=1)), threshold = $(min_epv)). " *
+            "Below roughly 10 events per variable, logistic regression estimates " *
+            "and their standard errors are unreliable (Peduzzi et al., 1996). " *
+            "Reduce the predictor set via `exclude_cols`, or lower `min_epv` " *
+            "to accept the result. Reported as inconclusive.")
         INCONCLUSIVE
     elseif global_pvalue < alpha
         MCAR_REJECTED
@@ -356,10 +478,14 @@ function test_mcar_logistic(
         "n_missing"              => n_missing,
         "n_model_rows"           => nrow(df_model),
         "col_missing"            => string(col_missing),
+        "constant_cols_excluded"    => string.(constant_cols),
+        "high_cardinality_excluded" => string.(high_card),
         "predictors"             => string.(predictors),
         "lr_statistic"           => isnan(lr_stat) ? NaN : round(lr_stat, digits=4),
         "global_pvalue"          => isnan(global_pvalue) ? NaN : round(global_pvalue, digits=6),
         "df"                     => df_lr,
+        "events"                 => events,
+        "epv"                    => df_lr > 0 ? round(events / df_lr, digits=2) : NaN,
         "min_pvalue"             => isnan(min_pvalue) ? NaN : round(min_pvalue, digits=4),
         "significant_predictors" => significant_predictors,
         "n_significant"          => length(significant_predictors),
