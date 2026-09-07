@@ -59,7 +59,7 @@ println(comparison.recommendation)
 
 # Interpretation Guide
 
-The function identifies three scenarios:
+The function identifies four scenarios:
 
 1. **Agreement (all tests aligned)**
    - All reject OR all accept MCAR
@@ -74,6 +74,12 @@ The function identifies three scenarios:
    - Mixed results across tests
    - Indicates: Complex missing mechanism
    - Recommendation: Use most conservative approach (assume MAR/MNAR)
+
+4. **Insufficient data**
+   - No test (Little's or pairwise) reached a real decision
+   - This is NOT evidence that MCAR holds — it means nothing could be
+     computed (e.g. too few rows, no complete predictor column)
+   - Recommendation: Do not interpret as MCAR; fix the underlying data issue
 """
 function compare_mcar_tests(
     df::DataFrame;
@@ -144,25 +150,47 @@ function compare_mcar_tests(
     end
     
     # ── 2. RUN PAIRWISE TESTS ────────────────────────────────────
+    # Every column in cols_with_missing gets an entry in both dicts below,
+    # even when the underlying test cannot run. Previously, an exception
+    # (e.g. "fewer than 10 rows") caused the column to be dropped silently,
+    # which is indistinguishable downstream from "0 columns were tested" —
+    # the root cause of compare_mcar_tests reporting FULL AGREEMENT on
+    # datasets where nothing had actually been computed.
     means_results = Dict{Symbol, TestResult}()
     logistic_results = Dict{Symbol, TestResult}()
-    
+
     for col in cols_with_missing
-        # Pairwise t-tests (test against all other numeric columns)
-        numeric_cols = [c for c in propertynames(df) 
-                    if c != col && 
+        # Pairwise t-tests (test against a fully observed numeric column)
+        numeric_cols = [c for c in propertynames(df)
+                    if c != col &&
                         eltype(df[!, c]) <: Union{Missing, Number} &&
-                        !any(ismissing, df[!, c])]  # ← AJOUT : colonne complète
+                        !any(ismissing, df[!, c])]
 
         if !isempty(numeric_cols)
-            # Use first complete numeric predictor for means test
             try
                 means_results[col] = test_mcar_means(df, col, numeric_cols[1], alpha=alpha)
             catch e
                 @warn "t-test for $col failed: $e"
+                means_results[col] = TestResult(
+                    "Welch t-test", NaN, NaN;
+                    alpha = alpha,
+                    details = Dict{String,Any}(
+                        "reason" => "Exception during test execution: $(sprint(showerror, e))"
+                    ),
+                    warnings = ["Test raised an exception and could not be completed."]
+                )
             end
+        else
+            means_results[col] = TestResult(
+                "Welch t-test", NaN, NaN;
+                alpha = alpha,
+                details = Dict{String,Any}(
+                    "reason" => "No fully observed numeric column available as a comparison variable"
+                ),
+                warnings = ["No complete numeric predictor available — t-test not applicable"]
+            )
         end
-        
+
         # Logistic regression
         try
             logistic_results[col] = test_mcar_logistic(df, col; alpha=alpha,
@@ -170,6 +198,14 @@ function compare_mcar_tests(
                                                        min_epv=min_epv)
         catch e
             @warn "Logistic test for $col failed: $e"
+            logistic_results[col] = TestResult(
+                "MCAR Logistic Regression Test", NaN, NaN;
+                alpha = alpha,
+                details = Dict{String,Any}(
+                    "reason" => "Exception during test execution: $(sprint(showerror, e))"
+                ),
+                warnings = ["Test raised an exception and could not be completed."]
+            )
         end
     end
     
@@ -314,10 +350,13 @@ function _generate_comparison_summary(
                          if result.decision == MCAR_REJECTED]
         means_accepted = [col for (col, result) in means_results 
                          if result.decision == MCAR_NOT_REJECTED]
+        means_inconclusive = [col for (col, result) in means_results
+                             if result.decision == INCONCLUSIVE]
         
         println(io_summary, "   Variables tested: $(length(means_results))")
         println(io_summary, "   MCAR rejected:    $(length(means_rejected))")
         println(io_summary, "   MCAR accepted:    $(length(means_accepted))")
+        println(io_summary, "   INCONCLUSIVE:     $(length(means_inconclusive))")
         println(io_summary)
         
         if !isempty(means_rejected)
@@ -333,6 +372,16 @@ function _generate_comparison_summary(
                 println(io_summary, "      • $col (p = $(round(means_results[col].pvalue, digits=4)))")
             end
         end
+
+        if !isempty(means_inconclusive)
+            println(io_summary, "   ⚠️  INCONCLUSIVE (see per-column warnings):")
+            for col in means_inconclusive[1:min(3, length(means_inconclusive))]
+                println(io_summary, "      • $col")
+            end
+            if length(means_inconclusive) > 3
+                println(io_summary, "      ... and $(length(means_inconclusive) - 3) more")
+            end
+        end
     else
         println(io_summary, "   ❌ No t-tests completed")
     end
@@ -342,15 +391,37 @@ function _generate_comparison_summary(
     println(io_summary, "4. CONSENSUS ANALYSIS")
     println(io_summary, "─"^70)
     
-    # Count rejections
-    little_rejects = !isnothing(little_result) && little_result.decision == MCAR_REJECTED
-    logistic_rejections = count(r -> r.decision == MCAR_REJECTED, values(logistic_results))
-    means_rejections = count(r -> r.decision == MCAR_REJECTED, values(means_results))
+    # Little's test status. `nothing` (threw before returning) and an
+    # INCONCLUSIVE decision are treated identically: in neither case did
+    # Little's test produce evidence for or against MCAR.
+    little_status  = isnothing(little_result) ? INCONCLUSIVE : little_result.decision
+    little_rejects = little_status == MCAR_REJECTED
+    little_ran     = little_status != INCONCLUSIVE  # reached REJECTED or NOT_REJECTED
+
+    all_pairwise = vcat(collect(values(logistic_results)), collect(values(means_results)))
+
+    pairwise_rejected     = count(r -> r.decision == MCAR_REJECTED,     all_pairwise)
+    pairwise_not_rejected = count(r -> r.decision == MCAR_NOT_REJECTED, all_pairwise)
+    pairwise_inconclusive = count(r -> r.decision == INCONCLUSIVE,      all_pairwise)
+
+    total_pairwise   = length(all_pairwise)
+    total_rejections = pairwise_rejected
+    has_conclusive_evidence = little_ran || (pairwise_rejected + pairwise_not_rejected) > 0
     
-    total_pairwise = length(logistic_results) + length(means_results)
-    total_rejections = logistic_rejections + means_rejections
-    
-    if little_rejects && total_rejections > 0
+    if !has_conclusive_evidence
+        # Neither Little's test nor any pairwise test reached a real decision.
+        # This is NOT the same as "all tests agree MCAR holds" — it means no
+        # evidence was produced either way. Reporting it as agreement was the
+        # bug: a dataset too small or too degenerate to test would silently
+        # come back as "MCAR may hold".
+        consensus = "INSUFFICIENT DATA"
+        println(io_summary, "   ⚠️  $consensus: No test reached a conclusion")
+        println(io_summary, "   Little's test: $(format_decision(little_status))")
+        println(io_summary, "   Pairwise tests: $(total_pairwise) attempted, $(pairwise_inconclusive) inconclusive, " *
+                             "$(pairwise_rejected) rejected, $(pairwise_not_rejected) not rejected")
+        println(io_summary, "   MCAR status cannot be determined from this dataset.")
+
+    elseif little_rejects && total_rejections > 0
         consensus = "STRONG AGREEMENT"
         println(io_summary, "   ✓ $consensus: All tests reject MCAR")
         println(io_summary, "   Confidence: HIGH")
@@ -382,7 +453,19 @@ function _generate_comparison_summary(
     println(io_rec, "═"^70)
     println(io_rec)
     
-    if consensus == "STRONG AGREEMENT"
+    if consensus == "INSUFFICIENT DATA"
+        println(io_rec, "⚠️  VERDICT: NOT DETERMINED — insufficient data to test MCAR")
+        println(io_rec)
+        println(io_rec, "None of the requested tests could reach a conclusion on this dataset")
+        println(io_rec, "(too few rows, no fully observed predictor column, or model fitting failures).")
+        println(io_rec)
+        println(io_rec, "Recommended actions:")
+        println(io_rec, "1. Check sample size — most tests need at least 10-30 observations per group")
+        println(io_rec, "2. Ensure at least one fully observed numeric column exists as a predictor")
+        println(io_rec, "3. Review the `details` and `warnings` fields of each TestResult for the exact cause")
+        println(io_rec, "4. Do NOT interpret this result as evidence that MCAR holds")
+
+    elseif consensus == "STRONG AGREEMENT"
         println(io_rec, "✓ CLEAR VERDICT: MCAR is VIOLATED")
         println(io_rec)
         println(io_rec, "Recommended actions:")

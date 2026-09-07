@@ -655,6 +655,76 @@ using Random
     end
 
     # ================================================================
+    # MCAR TESTS — compare_mcar_tests (consensus logic)
+    # ================================================================
+
+    @testset "MCAR Tests: compare_mcar_tests" begin
+
+        # ── Test 1: Insufficient data must not read as agreement ────
+        # Regression test for the exact scenario reported during package
+        # review: a 5-row DataFrame where every underlying test throws
+        # or returns INCONCLUSIVE. Before the fix, this was misreported
+        # as "FULL AGREEMENT — MCAR may hold".
+        @testset "Insufficient data reported honestly" begin
+            df_tiny = DataFrame(
+                income = [50000, missing, 45000, missing, 60000],
+                age    = [25, 30, missing, 40, 45]
+            )
+            comp = compare_mcar_tests(df_tiny; verbose=false)
+
+            @test comp isa MCARTestComparison
+            @test occursin("INSUFFICIENT DATA", comp.summary)
+            @test !occursin("FULL AGREEMENT", comp.summary)
+            @test occursin("NOT DETERMINED", comp.recommendation)
+            @test occursin("Do NOT interpret this result as evidence that MCAR holds",
+                            comp.recommendation)
+
+            # Every column with missing data must still appear in both
+            # result dicts, even though the underlying tests could not run —
+            # a column silently dropped is what caused the bug in the first place.
+            @test haskey(comp.logistic_results, :income)
+            @test haskey(comp.logistic_results, :age)
+            @test haskey(comp.means_results, :income)
+            @test haskey(comp.means_results, :age)
+            @test comp.logistic_results[:income].decision == INCONCLUSIVE
+            @test comp.means_results[:income].decision == INCONCLUSIVE
+        end
+
+        # ── Test 2: Genuine agreement must still be detected ─────────
+        # Guards against over-correcting: when tests genuinely run and
+        # find no evidence against MCAR, the result must NOT be
+        # swallowed into the new "INSUFFICIENT DATA" category.
+        @testset "Real conclusions are not misclassified as insufficient data" begin
+            Random.seed!(2024)
+            n = 300
+            z = randn(n)                                   # fully observed predictor
+            x1 = randn(n)
+            miss_idx = randperm(n)[1:round(Int, 0.15n)]     # missingness unrelated to z
+            x1_missing = allowmissing(x1)
+            x1_missing[miss_idx] .= missing
+
+            df_clean = DataFrame(x1 = x1_missing, z = z)
+            comp = compare_mcar_tests(df_clean; verbose=false)
+
+            @test !occursin("INSUFFICIENT DATA", comp.summary)
+            @test haskey(comp.means_results, :x1)
+            @test comp.means_results[:x1].decision != INCONCLUSIVE
+        end
+
+        # ── Test 3: No missing data short-circuits cleanly ───────────
+        @testset "No missing data" begin
+            df_complete = DataFrame(a = [1, 2, 3], b = [4, 5, 6])
+            comp = compare_mcar_tests(df_complete; verbose=false)
+
+            @test comp.little_result === nothing
+            @test isempty(comp.logistic_results)
+            @test isempty(comp.means_results)
+            @test occursin("No missing data detected", comp.summary)
+        end
+
+    end
+
+    # ================================================================
     # VISUALIZATION TESTS
     # ================================================================
     
