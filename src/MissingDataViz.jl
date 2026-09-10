@@ -128,7 +128,9 @@ export MCAR_NOT_REJECTED, MCAR_REJECTED, INCONCLUSIVE
 export test_mcar_means, test_all_mcar_means
 export summary_table 
 export test_mcar_logistic
+export interpret_logistic_result
 export test_mcar_little
+export interpret_mcar_little
 export generate_mcar_data, generate_mar_data, generate_mnar_data
 export ValidationMetrics, describe_missing_mechanism
 export compare_mcar_tests, MCARTestComparison

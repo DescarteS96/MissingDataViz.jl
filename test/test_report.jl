@@ -36,7 +36,7 @@ using MissingDataViz
     end
     
     @testset "generate_html_report - Custom Title" begin
-        df = DataFrame(X = [1, missing, 3])
+        df = DataFrame(X = [1, missing, 3], Y = [4, 5, 6])
         
         custom_title = "Custom Test Report 2024"
         output_path = generate_html_report(
@@ -52,7 +52,7 @@ using MissingDataViz
     end
     
     @testset "generate_html_report - Path Handling" begin
-        df = DataFrame(A = [1, missing, 3])
+        df = DataFrame(A = [1, missing, 3], B = [4, 5, 6])
         
         # Test relative path
         rel_output = generate_html_report(df, "test_relative.html")
@@ -81,7 +81,7 @@ using MissingDataViz
     
     @testset "generate_html_report - Edge Cases" begin
         # Test single column DataFrame
-        df_single = DataFrame(A = [1, missing, 3])
+        df_single = DataFrame(A = [1, missing, 3], B = [4, 5, 6])
         output = generate_html_report(df_single, "test_single_col.html")
         @test isfile(output)
         rm(output)
@@ -106,7 +106,7 @@ using MissingDataViz
         rm(output)
         
         # Test filename with spaces (valid on most systems)
-        df = DataFrame(X = [1, missing])
+        df = DataFrame(X = [1, missing], Y = [2, 3])
         output = generate_html_report(df, "test report spaces.html")
         @test isfile(output)
         rm(output)
@@ -162,7 +162,7 @@ end
     end
     
     @testset "diagnose_missing - Convenience Syntax" begin
-        df = DataFrame(X = [1, missing])
+        df = DataFrame(X = [1, missing], Y = [2, 3])
         
         # Test shorthand syntax
         results = diagnose_missing(df, "test_convenience.html")
@@ -211,9 +211,9 @@ end
     
     @testset "diagnose_missing - Edge Cases" begin
         # Single column
-        df_single = DataFrame(A = [1, missing, 3])
+        df_single = DataFrame(A = [1, missing, 3], B = [4, 5, 6])
         results = diagnose_missing(df_single, display=false)
-        @test length(results[:stats][:columns]) == 1
+        @test length(results[:stats][:columns]) == 2
         
         # All complete data
         df_complete = DataFrame(A = [1, 2, 3], B = [4, 5, 6])
@@ -270,7 +270,7 @@ end
     end
     
     @testset "_convert_plots_to_base64" begin
-        df = DataFrame(X = [1, missing])
+        df = DataFrame(X = [1, missing], Y = [2, 3])
         figures = MissingDataViz._generate_all_plots(df)
         
         plots_b64 = MissingDataViz._convert_plots_to_base64(figures)

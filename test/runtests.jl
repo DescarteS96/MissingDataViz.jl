@@ -655,6 +655,75 @@ using Random
     end
 
     # ================================================================
+    # MCAR TESTS — test_mcar_little
+    # ================================================================
+
+    @testset "MCAR Tests: test_mcar_little" begin
+
+        Random.seed!(42)
+        df_mar = generate_mar_data(2000, 4, 0.20; seed=42)
+
+        @testset "Basic functionality" begin
+            r = test_mcar_little(df_mar)
+            @test r isa TestResult
+            @test r.test_name == "Little's MCAR Test"
+            @test !isnan(r.statistic)
+            @test !isnan(r.pvalue)
+            @test r.degrees_of_freedom !== nothing
+            @test r.degrees_of_freedom > 0
+        end
+
+        @testset "TestResult structure" begin
+            r = test_mcar_little(df_mar)
+            @test haskey(r.details, "n_rows")
+            @test haskey(r.details, "n_cols")
+            @test haskey(r.details, "n_complete")
+            @test haskey(r.details, "pct_complete")
+            @test haskey(r.details, "n_patterns")
+            @test haskey(r.details, "chi_squared")
+            @test haskey(r.details, "degrees_of_freedom")
+            @test haskey(r.details, "pattern_counts")
+        end
+
+        @testset "Validation errors" begin
+            df_one_col = DataFrame(a = randn(50))
+            @test_throws ArgumentError test_mcar_little(df_one_col)
+
+            df_few_rows = DataFrame(a = randn(5), b = randn(5))
+            @test_throws ArgumentError test_mcar_little(df_few_rows)
+        end
+
+        @testset "Categorical-only missing → INCONCLUSIVE" begin
+            df_cat = DataFrame(
+                age    = collect(1.0:50.0),
+                income = collect(50.0:99.0),
+                dept   = vcat(fill(missing, 10), fill("Sales", 40))
+            )
+            r = test_mcar_little(df_cat)
+            @test r.decision == INCONCLUSIVE
+            @test occursin("categorical columns", r.details["reason"])
+        end
+
+        @testset "No numeric columns → INCONCLUSIVE" begin
+            df_str = DataFrame(
+                a = fill("x", 20),
+                b = vcat(fill(missing, 5), fill("y", 15))
+            )
+            r = test_mcar_little(df_str)
+            @test r.decision == INCONCLUSIVE
+            @test occursin("No numeric columns", r.details["reason"])
+        end
+
+        @testset "interpret_mcar_little" begin
+            r = test_mcar_little(df_mar)
+            text = interpret_mcar_little(r)
+            @test text isa String
+            @test occursin("LITTLE'S MCAR TEST", text)
+        end
+
+    end
+
+    # ================================================================
     # MCAR TESTS — compare_mcar_tests (consensus logic)
     # ================================================================
 
@@ -735,4 +804,19 @@ using Random
     # ================================================================
     
     include("test_validation.jl")
+
+    # ================================================================
+    # DIAGNOSIS PIPELINE TESTS (full_missing_diagnosis, dashboard, mcar plot)
+    # ================================================================
+
+    include("test_diagnosis.jl")
+
+    # ================================================================
+    # REPORT GENERATION TESTS (generate_html_report, diagnose_missing)
+    # Written previously but never wired into the test suite — flagged
+    # during package review.
+    # ================================================================
+
+    include("test_report.jl")
+
 end

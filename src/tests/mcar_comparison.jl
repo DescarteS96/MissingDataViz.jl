@@ -172,7 +172,7 @@ function compare_mcar_tests(
             catch e
                 @warn "t-test for $col failed: $e"
                 means_results[col] = TestResult(
-                    "Welch t-test", NaN, NaN;
+                    "MCAR Means Test (Welch t-test)", NaN, NaN;
                     alpha = alpha,
                     details = Dict{String,Any}(
                         "reason" => "Exception during test execution: $(sprint(showerror, e))"
@@ -182,7 +182,7 @@ function compare_mcar_tests(
             end
         else
             means_results[col] = TestResult(
-                "Welch t-test", NaN, NaN;
+                "MCAR Means Test (Welch t-test)", NaN, NaN;
                 alpha = alpha,
                 details = Dict{String,Any}(
                     "reason" => "No fully observed numeric column available as a comparison variable"
