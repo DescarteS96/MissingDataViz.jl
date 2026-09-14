@@ -21,6 +21,7 @@ makedocs(;
         "Home" => "index.md",
         "Getting Started" => "getting-started.md",  
         "User Guide" => "guide.md",
+        "Benchmarks & Validation" => "benchmarks.md",
         "API Reference" => "api.md",
     ],
     checkdocs=:exports,
