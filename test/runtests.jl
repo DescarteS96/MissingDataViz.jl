@@ -759,6 +759,24 @@ using Random
             @test comp.means_results[:income].decision == INCONCLUSIVE
         end
 
+        # ── Test 1b: Little's test failure carries its actual cause ──
+        # Regression test for a related gap: before this fix,
+        # little_result collapsed to `nothing` on any exception, losing
+        # the specific reason (e.g. "fewer than 10 rows") in favor of
+        # the generic format_decision() message.
+        @testset "Little's test failure is preserved with a reason" begin
+            df_tiny = DataFrame(
+                income = [50000, missing, 45000, missing, 60000],
+                age    = [25, 30, missing, 40, 45]
+            )
+            comp = compare_mcar_tests(df_tiny; verbose=false)
+
+            @test comp.little_result !== nothing
+            @test comp.little_result.decision == INCONCLUSIVE
+            @test haskey(comp.little_result.details, "reason")
+            @test occursin("10 rows", comp.little_result.details["reason"])
+        end
+
         # ── Test 2: Genuine agreement must still be detected ─────────
         # Guards against over-correcting: when tests genuinely run and
         # find no evidence against MCAR, the result must NOT be

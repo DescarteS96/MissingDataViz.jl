@@ -142,11 +142,24 @@ function compare_mcar_tests(
     end
     
     # ── 1. RUN LITTLE'S TEST (GLOBAL) ──────────────────────────
+    # A thrown exception is converted into a proper INCONCLUSIVE TestResult
+    # with the exact cause preserved in `details`/`warnings`, rather than
+    # collapsing to `nothing`. This keeps `little_result` inspectable and
+    # avoids relying on the generic format_decision() message for what
+    # was actually a specific, known failure (e.g. "fewer than 10 rows").
     little_result = try
         test_mcar_little(df, alpha=alpha)
     catch e
         @warn "Little's test failed: $e"
-        nothing
+        TestResult(
+            "Little's MCAR Test", NaN, NaN;
+            alpha = alpha,
+            details = Dict{String,Any}(
+                "reason" => "Exception during test execution: $(sprint(showerror, e))"
+            ),
+            warnings = ["Test raised an exception and could not be completed: " *
+                        sprint(showerror, e)]
+        )
     end
     
     # ── 2. RUN PAIRWISE TESTS ────────────────────────────────────
@@ -274,12 +287,17 @@ function _generate_comparison_summary(
     
     if !isnothing(little_result)
         println(io_summary, "   Decision: $(uppercase(string(little_result.decision)))")
-        println(io_summary, "   p-value:  $(round(little_result.pvalue, digits=4))")
-        println(io_summary, "   Chi²:     $(round(little_result.statistic, digits=2)), df = $(little_result.degrees_of_freedom)")
-        
+        if little_result.decision == INCONCLUSIVE
+            reason = get(little_result.details, "reason", "Unknown")
+            println(io_summary, "   Reason:   $reason")
+        else
+            println(io_summary, "   p-value:  $(round(little_result.pvalue, digits=4))")
+            println(io_summary, "   Chi²:     $(round(little_result.statistic, digits=2)), df = $(little_result.degrees_of_freedom)")
+        end
+
         if little_result.decision == MCAR_REJECTED
             println(io_summary, "   ⚠️  MCAR violated globally")
-        else
+        elseif little_result.decision == MCAR_NOT_REJECTED
             println(io_summary, "   ✓  No strong evidence against MCAR")
         end
     else
