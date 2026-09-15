@@ -90,15 +90,15 @@ function test_mcar_little(
     miss_matrix = Matrix(ismissing.(df_numeric))
     pattern_strings = [join(Int.(row), "") for row in eachrow(miss_matrix)]
     
-    pattern_counts = Dict{String, Int}()
+    pattern_count_map = Dict{String, Int}()
     pattern_indices = Dict{String, Vector{Int}}()
     
     for (i, pat) in enumerate(pattern_strings)
-        pattern_counts[pat] = get(pattern_counts, pat, 0) + 1
+        pattern_count_map[pat] = get(pattern_count_map, pat, 0) + 1
         push!(get!(pattern_indices, pat, Int[]), i)
     end
 
-    n_patterns = length(pattern_counts)
+    n_patterns = length(pattern_count_map)
     n_patterns > max_patterns && push!(warnings, "$n_patterns patterns > $max_patterns — may be slow")
 
     # Estimate parameters from complete cases
@@ -143,8 +143,9 @@ function test_mcar_little(
         vcat(warnings, ["Test statistic computation failed — check data structure"])
     )
 
-    # P-value
-    pvalue = 1 - cdf(Chisq(total_df), d_squared)
+    # P-value (ccdf is numerically more stable than 1 - cdf in the far
+    # right tail of the distribution — same convention as mcar_logistic.jl)
+    pvalue = ccdf(Chisq(total_df), d_squared)
     decision = pvalue < alpha ? MCAR_REJECTED : MCAR_NOT_REJECTED
 
     details = Dict{String, Any}(
@@ -155,7 +156,7 @@ function test_mcar_little(
         "n_patterns" => n_patterns,
         "chi_squared" => round(d_squared, digits=4),
         "degrees_of_freedom" => total_df,
-        "pattern_counts" => sort(collect(pattern_counts), by=x->x[2], rev=true)[1:min(5, n_patterns)]
+        "pattern_counts" => sort(collect(pattern_count_map), by=x->x[2], rev=true)[1:min(5, n_patterns)]
     )
 
     return TestResult("Little's MCAR Test", d_squared, pvalue, alpha, decision, total_df, details, warnings)
@@ -214,10 +215,10 @@ function interpret_mcar_little(result::TestResult)::String
         println(io, "  • Chi-square: $(get(result.details, "chi_squared", "N/A")), df: $(get(result.details, "degrees_of_freedom", "N/A")), p = $(round(result.pvalue, digits=4))")
         println(io)
         
-        pattern_counts = get(result.details, "pattern_counts", [])
-        if !isempty(pattern_counts)
-            println(io, "Top $(min(5, length(pattern_counts))) most common patterns:")
-            for (i, (pattern, count)) in enumerate(pattern_counts)
+        pattern_count_map = get(result.details, "pattern_counts", [])
+        if !isempty(pattern_count_map)
+            println(io, "Top $(min(5, length(pattern_count_map))) most common patterns:")
+            for (i, (pattern, count)) in enumerate(pattern_count_map)
                 desc = all(c == '0' for c in pattern) ? "Complete" : "Missing x" * join(findall(c -> c == '1', collect(pattern)), ", x")
                 println(io, "  $i. $desc ($pattern): $count cases")
             end
